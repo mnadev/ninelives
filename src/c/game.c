@@ -10,6 +10,8 @@ static bool s_debug_force_state = false;
 static PetState s_debug_state = PET_STATE_ENERGETIC;
 static bool s_debug_force_steps = false;
 static int32_t s_debug_steps = 0;
+static bool s_debug_force_cat_count = false;
+static int s_debug_cat_count = 1;
 #endif
 
 static void prv_load_settings(void) {
@@ -49,17 +51,7 @@ static bool prv_goal_failed(int32_t steps, int32_t goal) {
   return steps < goal;
 }
 
-int game_get_day_number(void) {
-  time_t now = time(NULL);
-  struct tm *tm_info = localtime(&now);
-  return tm_info->tm_year * 400 + tm_info->tm_yday;
-}
-
-int32_t game_get_step_goal(void) {
-  if (s_settings.step_goal > 0) {
-    return s_settings.step_goal;
-  }
-
+static int32_t prv_resolve_auto_goal(void) {
   time_t now = time(NULL);
   time_t start = now - (30 * SECONDS_PER_DAY);
   HealthValue avg = health_service_sum_averaged(
@@ -67,7 +59,76 @@ int32_t game_get_step_goal(void) {
   if (avg > 0) {
     return (int32_t)avg;
   }
+  if (persist_exists(PERSIST_KEY_CACHED_GOAL)) {
+    return persist_read_int(PERSIST_KEY_CACHED_GOAL);
+  }
   return DEFAULT_STEP_GOAL;
+}
+
+static int32_t prv_refresh_cached_goal(void) {
+  int today = game_get_day_number();
+  if (persist_exists(PERSIST_KEY_CACHED_GOAL_DAY)
+      && persist_read_int(PERSIST_KEY_CACHED_GOAL_DAY) == today) {
+    return persist_read_int(PERSIST_KEY_CACHED_GOAL);
+  }
+
+  int32_t goal;
+  if (s_settings.step_goal > 0) {
+    goal = s_settings.step_goal;
+  } else {
+    goal = prv_resolve_auto_goal();
+  }
+
+  persist_write_int(PERSIST_KEY_CACHED_GOAL, goal);
+  persist_write_int(PERSIST_KEY_CACHED_GOAL_DAY, today);
+  return goal;
+}
+
+static int32_t prv_goal_for_day(int day) {
+  if (persist_exists(PERSIST_KEY_CACHED_GOAL_DAY)
+      && persist_read_int(PERSIST_KEY_CACHED_GOAL_DAY) == day
+      && persist_exists(PERSIST_KEY_CACHED_GOAL)) {
+    return persist_read_int(PERSIST_KEY_CACHED_GOAL);
+  }
+  if (s_settings.step_goal > 0) {
+    return s_settings.step_goal;
+  }
+  if (persist_exists(PERSIST_KEY_CACHED_GOAL)) {
+    return persist_read_int(PERSIST_KEY_CACHED_GOAL);
+  }
+  return DEFAULT_STEP_GOAL;
+}
+
+static void prv_sync_dead_state(void) {
+  s_state.is_dead = s_state.cat_count <= 0;
+}
+
+static void prv_persist_cat_count(void) {
+  persist_write_int(PERSIST_KEY_CAT_COUNT, s_state.cat_count);
+  persist_write_bool(PERSIST_KEY_IS_DEAD, s_state.cat_count <= 0);
+}
+
+int game_get_day_number(void) {
+  time_t now = time(NULL);
+  struct tm *tm_info = localtime(&now);
+  return tm_info->tm_year * 400 + tm_info->tm_yday;
+}
+
+int32_t game_get_step_goal(void) {
+  return prv_refresh_cached_goal();
+}
+
+CatBreed game_get_cat_breed_for_slot(int slot) {
+  if (slot < 0) {
+    slot = 0;
+  }
+  return (CatBreed)((s_settings.cat_breed + slot) % NUM_CAT_BREEDS);
+}
+
+void game_invalidate_goal_cache(void) {
+  if (persist_exists(PERSIST_KEY_CACHED_GOAL_DAY)) {
+    persist_delete(PERSIST_KEY_CACHED_GOAL_DAY);
+  }
 }
 
 static float prv_get_pace_fraction(void) {
@@ -109,16 +170,6 @@ PetState game_compute_pace_state(int32_t steps, int32_t goal) {
   return PET_STATE_DISTRESSED;
 }
 
-SkyPhase game_get_sky_phase(int hour) {
-  if (hour >= 6 && hour < 17) {
-    return SKY_DAY;
-  }
-  if (hour >= 17 && hour < 20) {
-    return SKY_SUNSET;
-  }
-  return SKY_NIGHT;
-}
-
 // Evaluates the previous day's goal exactly once per day boundary.
 // Safe to call repeatedly; guarded by the persisted last-evaluated day.
 void game_on_day_change(void) {
@@ -132,13 +183,13 @@ void game_on_day_change(void) {
   }
 
   // Only judge the cat if there was a tracked previous day (not first run).
-  if (last_eval >= 0) {
-    int32_t goal = game_get_step_goal();
+  if (last_eval >= 0 && s_state.cat_count > 0) {
+    int32_t goal = prv_goal_for_day(last_eval);
     int32_t last_steps = persist_exists(PERSIST_KEY_LAST_DAY_STEPS)
         ? persist_read_int(PERSIST_KEY_LAST_DAY_STEPS) : 0;
     if (prv_goal_failed(last_steps, goal)) {
-      s_state.is_dead = true;
-      persist_write_bool(PERSIST_KEY_IS_DEAD, true);
+      s_state.cat_count--;
+      prv_persist_cat_count();
     }
   }
 
@@ -146,6 +197,8 @@ void game_on_day_change(void) {
   persist_write_int(PERSIST_KEY_LAST_DAY_STEPS, 0);
   s_last_persisted_steps = 0;
   s_state.resurrection_progress = 0;
+  prv_sync_dead_state();
+  prv_refresh_cached_goal();
 }
 
 static void prv_update_sleep_state(void) {
@@ -185,9 +238,28 @@ static PetState prv_resolve_pet_state(void) {
   return game_compute_pace_state(s_state.steps, s_state.step_goal);
 }
 
+static void prv_try_award_cat(void) {
+  int today = game_get_day_number();
+  int last_reward = persist_exists(PERSIST_KEY_LAST_REWARD_DAY)
+      ? persist_read_int(PERSIST_KEY_LAST_REWARD_DAY) : -1;
+
+  if (last_reward == today) {
+    return;
+  }
+  if (s_state.step_goal <= 0 || s_state.steps < s_state.step_goal) {
+    return;
+  }
+  if (s_state.cat_count >= MAX_CATS) {
+    return;
+  }
+
+  s_state.cat_count++;
+  prv_persist_cat_count();
+  persist_write_int(PERSIST_KEY_LAST_REWARD_DAY, today);
+  prv_sync_dead_state();
+}
+
 void game_update(void) {
-  time_t now = time(NULL);
-  struct tm *tm_info = localtime(&now);
   int day = game_get_day_number();
 
   if (day != s_current_day) {
@@ -200,18 +272,23 @@ void game_update(void) {
   } else {
     s_state.steps = (int32_t)health_service_sum_today(HealthMetricStepCount);
   }
+  if (s_debug_force_cat_count) {
+    s_state.cat_count = s_debug_cat_count;
+    prv_persist_cat_count();
+    prv_sync_dead_state();
+  }
 #else
   s_state.steps = (int32_t)health_service_sum_today(HealthMetricStepCount);
 #endif
 
-  // Throttle flash writes: only persist when the value actually changed.
-  if (s_state.steps != s_last_persisted_steps) {
+  // Monotonic within a day: avoid clobbering the snapshot with a transient 0
+  // while the health service is still loading after reboot.
+  if (s_state.steps > s_last_persisted_steps) {
     persist_write_int(PERSIST_KEY_LAST_DAY_STEPS, s_state.steps);
     s_last_persisted_steps = s_state.steps;
   }
 
   s_state.step_goal = game_get_step_goal();
-  s_state.sky_phase = game_get_sky_phase(tm_info->tm_hour);
 
   prv_update_sleep_state();
   prv_update_battery_state();
@@ -219,10 +296,13 @@ void game_update(void) {
   if (s_state.is_dead) {
     s_state.resurrection_progress = s_state.steps;
     if (s_state.resurrection_progress >= RESURRECTION_STEPS) {
-      s_state.is_dead = false;
-      persist_write_bool(PERSIST_KEY_IS_DEAD, false);
+      s_state.cat_count = 1;
+      prv_persist_cat_count();
       s_state.resurrection_progress = 0;
+      prv_sync_dead_state();
     }
+  } else {
+    prv_try_award_cat();
   }
 
   if (s_state.is_dead) {
@@ -245,8 +325,30 @@ void game_update(void) {
 void game_init(void) {
   prv_load_settings();
   memset(&s_state, 0, sizeof(s_state));
-  s_state.is_dead = persist_exists(PERSIST_KEY_IS_DEAD) && persist_read_bool(PERSIST_KEY_IS_DEAD);
   s_state.resurrection_goal = RESURRECTION_STEPS;
+
+  if (persist_exists(PERSIST_KEY_CAT_COUNT)) {
+    s_state.cat_count = persist_read_int(PERSIST_KEY_CAT_COUNT);
+  } else if (persist_exists(PERSIST_KEY_IS_DEAD) && persist_read_bool(PERSIST_KEY_IS_DEAD)) {
+    s_state.cat_count = 0;
+  } else {
+    s_state.cat_count = 1;
+  }
+  if (s_state.cat_count < 0) {
+    s_state.cat_count = 0;
+  }
+  if (s_state.cat_count > MAX_CATS) {
+    s_state.cat_count = MAX_CATS;
+  }
+  prv_persist_cat_count();
+  prv_sync_dead_state();
+
+  if (persist_exists(PERSIST_KEY_LAST_DAY_STEPS)) {
+    s_last_persisted_steps = persist_read_int(PERSIST_KEY_LAST_DAY_STEPS);
+  } else {
+    s_last_persisted_steps = 0;
+  }
+
   // Leave s_current_day at -1 so the first game_update() evaluates any
   // missed midnight rollover (e.g. watchface was not running at midnight).
   s_current_day = -1;
@@ -258,6 +360,7 @@ void game_deinit(void) {
 
 void game_reload_settings(void) {
   prv_load_settings();
+  game_invalidate_goal_cache();
   game_update();
 }
 
@@ -268,6 +371,7 @@ void game_on_settings_received(DictionaryIterator *iter) {
   if (tuple) {
     s_settings.step_goal = tuple->value->int32;
     persist_write_int(PERSIST_KEY_STEP_GOAL, s_settings.step_goal);
+    game_invalidate_goal_cache();
   }
 
   tuple = dict_find(iter, MESSAGE_KEY_CatBreed);
@@ -318,6 +422,18 @@ void game_debug_force_state(PetState state) {
 void game_debug_force_steps(int32_t steps) {
   s_debug_force_steps = true;
   s_debug_steps = steps;
+  game_update();
+}
+
+void game_debug_force_cat_count(int count) {
+  s_debug_force_cat_count = true;
+  if (count < 0) {
+    count = 0;
+  }
+  if (count > MAX_CATS) {
+    count = MAX_CATS;
+  }
+  s_debug_cat_count = count;
   game_update();
 }
 #endif

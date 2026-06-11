@@ -1,9 +1,12 @@
 #include <pebble.h>
+#include <stdlib.h>
 #include "game.h"
 #include "sprites.h"
 
 #define ANIM_INTERVAL_MS 200
 #define ANIM_DURATION_MS 4000
+#define WANDER_STEP 2
+#define CAT_MARGIN 4
 
 #if PBL_DISPLAY_HEIGHT >= 228
 #define FLICK_JUMP_HEIGHT 10
@@ -37,9 +40,6 @@
 #define BUTTERFLY_OFFSET_Y 8
 #define GHOST_FLOAT_OFFSET 8
 #define GHOST_FLOAT_RANGE 3
-#define MOON_X_OFFSET 22
-#define MOON_Y 14
-#define MOON_RADIUS 6
 #else
 #define FLICK_JUMP_HEIGHT 8
 #define FONT_TIME FONT_KEY_LECO_36_BOLD_NUMBERS
@@ -72,10 +72,14 @@
 #define BUTTERFLY_OFFSET_Y 6
 #define GHOST_FLOAT_OFFSET 6
 #define GHOST_FLOAT_RANGE 2
-#define MOON_X_OFFSET 18
-#define MOON_Y 12
-#define MOON_RADIUS 5
 #endif
+
+typedef struct {
+  int16_t x;
+  int16_t target_x;
+  CatFacing facing;
+  uint8_t frame_offset;
+} CatWanderState;
 
 static Window *s_window;
 static Layer *s_stage_layer;
@@ -92,6 +96,9 @@ static bool s_flick_interrupt;
 static int8_t s_jump_offset;
 static uint8_t s_ghost_frame;
 static bool s_battery_flash;
+static int s_last_cat_count = -1;
+
+static CatWanderState s_cats[MAX_CATS];
 
 static GBitmap *s_fish_skeleton;
 static GBitmap *s_fish_meat;
@@ -101,6 +108,100 @@ static GBitmap *s_butterfly_bitmap;
 static void prv_request_redraw(void) {
   layer_mark_dirty(s_stage_layer);
   layer_mark_dirty(s_hud_layer);
+}
+
+static int prv_cat_travel_max_x(void) {
+  return SCREEN_W - SPRITE_W - CAT_MARGIN;
+}
+
+static void prv_pick_wander_target(CatWanderState *cat) {
+  int min_x = CAT_MARGIN;
+  int max_x = prv_cat_travel_max_x();
+  if (max_x <= min_x) {
+    cat->target_x = SCREEN_W / 2;
+    return;
+  }
+  cat->target_x = min_x + (rand() % (max_x - min_x + 1));
+}
+
+static void prv_layout_cats(int count) {
+  if (count <= 0) {
+    return;
+  }
+  int span = prv_cat_travel_max_x() - CAT_MARGIN;
+  for (int i = 0; i < count; i++) {
+    if (count == 1) {
+      s_cats[i].x = (SCREEN_W - SPRITE_W) / 2;
+    } else {
+      s_cats[i].x = CAT_MARGIN + (span * i) / (count - 1);
+    }
+    s_cats[i].facing = (i % 2 == 0) ? CAT_FACING_RIGHT : CAT_FACING_LEFT;
+    s_cats[i].frame_offset = i;
+    prv_pick_wander_target(&s_cats[i]);
+  }
+}
+
+static void prv_sync_cat_layout(void) {
+  const GameState *state = game_get_state();
+  if (state->cat_count != s_last_cat_count) {
+    prv_layout_cats(state->cat_count);
+    s_last_cat_count = state->cat_count;
+  }
+}
+
+static bool prv_cat_can_wander(PetState state) {
+  return state == PET_STATE_ENERGETIC || state == PET_STATE_LAZY;
+}
+
+static PetState prv_sprite_state_for_cat(PetState state, bool wander_active) {
+  if (wander_active && prv_cat_can_wander(state)) {
+    return PET_STATE_ENERGETIC;
+  }
+  return state;
+}
+
+static void prv_update_cat_wander(CatWanderState *cat, bool wander_active, PetState state) {
+  if (!wander_active || !prv_cat_can_wander(state)) {
+    return;
+  }
+
+  if (cat->x < cat->target_x) {
+    cat->facing = CAT_FACING_RIGHT;
+    cat->x += WANDER_STEP;
+    if (cat->x >= cat->target_x) {
+      prv_pick_wander_target(cat);
+    }
+  } else if (cat->x > cat->target_x) {
+    cat->facing = CAT_FACING_LEFT;
+    cat->x -= WANDER_STEP;
+    if (cat->x <= cat->target_x) {
+      prv_pick_wander_target(cat);
+    }
+  }
+
+  if (cat->x < CAT_MARGIN) {
+    cat->x = CAT_MARGIN;
+    cat->facing = CAT_FACING_RIGHT;
+    prv_pick_wander_target(cat);
+  }
+  if (cat->x > prv_cat_travel_max_x()) {
+    cat->x = prv_cat_travel_max_x();
+    cat->facing = CAT_FACING_LEFT;
+    prv_pick_wander_target(cat);
+  }
+}
+
+static void prv_load_cat_sprites(PetState state, bool wander_active) {
+  const GameState *game_state = game_get_state();
+  prv_sync_cat_layout();
+
+  for (int i = 0; i < game_state->cat_count; i++) {
+    CatBreed breed = game_get_cat_breed_for_slot(i);
+    PetState sprite_state = prv_sprite_state_for_cat(state, wander_active);
+    uint8_t frame_count = sprites_get_frame_count(sprite_state);
+    uint8_t frame = (s_anim_frame + s_cats[i].frame_offset) % frame_count;
+    sprites_load_slot(i, breed, sprite_state, frame, s_cats[i].facing);
+  }
 }
 
 static void prv_stop_animation(void) {
@@ -119,17 +220,22 @@ static void prv_start_animation(void) {
   s_anim_elapsed_ms = 0;
   s_anim_active = true;
   const GameState *state = game_get_state();
-  sprites_load_frame(state->pet_state, 0);
+  prv_load_cat_sprites(state->pet_state, true);
   s_anim_timer = app_timer_register(ANIM_INTERVAL_MS, prv_anim_timer_callback, NULL);
   prv_request_redraw();
 }
 
 static void prv_anim_timer_callback(void *data) {
   const GameState *state = game_get_state();
-  uint8_t frame_count = sprites_get_frame_count(state->pet_state);
+  uint8_t frame_count = sprites_get_frame_count(
+      prv_sprite_state_for_cat(state->pet_state, true));
 
   s_anim_frame = (s_anim_frame + 1) % frame_count;
-  sprites_load_frame(state->pet_state, s_anim_frame);
+
+  for (int i = 0; i < state->cat_count; i++) {
+    prv_update_cat_wander(&s_cats[i], true, state->pet_state);
+  }
+  prv_load_cat_sprites(state->pet_state, true);
 
   if (state->pet_state == PET_STATE_DEAD) {
     s_ghost_frame = (s_ghost_frame + 1) % 2;
@@ -158,7 +264,7 @@ static void prv_anim_timer_callback(void *data) {
 
   if (s_anim_elapsed_ms >= ANIM_DURATION_MS) {
     prv_stop_animation();
-    sprites_load_frame(state->pet_state, 0);
+    prv_load_cat_sprites(state->pet_state, false);
     prv_request_redraw();
     return;
   }
@@ -184,46 +290,8 @@ static void prv_flick_jump_cb(void *data) {
   prv_request_redraw();
 }
 
-static void prv_draw_sky(GContext *ctx, SkyPhase phase) {
-  GRect bounds = layer_get_bounds(s_stage_layer);
-  GColor top;
-  GColor bottom;
-
-  switch (phase) {
-    case SKY_DAY:
-      top = GColorVividCerulean;
-      bottom = GColorCeleste;
-      break;
-    case SKY_SUNSET:
-      top = GColorOrange;
-      bottom = GColorChromeYellow;
-      break;
-    default:
-      top = GColorOxfordBlue;
-      bottom = GColorImperialPurple;
-      break;
-  }
-
-  graphics_context_set_fill_color(ctx, top);
-  graphics_fill_rect(ctx, GRect(0, 0, bounds.size.w, bounds.size.h / 2), 0, GCornerNone);
-  graphics_context_set_fill_color(ctx, bottom);
-  graphics_fill_rect(ctx, GRect(0, bounds.size.h / 2, bounds.size.w, bounds.size.h / 2), 0, GCornerNone);
-
-  if (phase == SKY_NIGHT) {
-    graphics_context_set_fill_color(ctx, GColorWhite);
-    for (int i = 0; i < 8; i++) {
-      int x = 12 + (i * 17) % bounds.size.w;
-      int y = 6 + (i * 9) % (bounds.size.h / 2);
-      graphics_fill_circle(ctx, GPoint(x, y), 1);
-    }
-    graphics_fill_circle(ctx, GPoint(bounds.size.w - MOON_X_OFFSET, MOON_Y), MOON_RADIUS);
-  }
-}
-
 static void prv_draw_ground(GContext *ctx) {
-  graphics_context_set_fill_color(ctx, GColorJaegerGreen);
-  graphics_fill_rect(ctx, GRect(0, GROUND_OFFSET, SCREEN_W, STAGE_H - GROUND_OFFSET), 0, GCornerNone);
-  graphics_context_set_stroke_color(ctx, GColorDarkGreen);
+  graphics_context_set_stroke_color(ctx, GColorDarkGray);
   graphics_draw_line(ctx, GPoint(0, GROUND_OFFSET), GPoint(SCREEN_W, GROUND_OFFSET));
 }
 
@@ -257,51 +325,81 @@ static void prv_draw_battery_icon(GContext *ctx, int x, int y, bool flash_on) {
   graphics_fill_rect(ctx, GRect(x + 2, y + 2, BATTERY_FILL_W, BATTERY_FILL_H), 0, GCornerNone);
 }
 
+static void prv_draw_cat_at(GContext *ctx, GBitmap *cat, int cat_x, int cat_y) {
+  if (!cat) {
+    return;
+  }
+  GSize cat_size = gbitmap_get_bounds(cat).size;
+  graphics_draw_bitmap_in_rect(ctx, cat, GRect(cat_x, cat_y, cat_size.w, cat_size.h));
+}
+
 static void prv_stage_update_proc(Layer *layer, GContext *ctx) {
   const GameState *state = game_get_state();
-  GBitmap *cat = sprites_get_current();
+  GRect bounds = layer_get_bounds(layer);
 
-  prv_draw_sky(ctx, state->sky_phase);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   prv_draw_ground(ctx);
 
-  // Bitmaps have transparent backgrounds; GCompOpSet honors their alpha.
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
 
-  // Bottom-align every sprite on the ground line using its real size.
-  GSize cat_size = cat ? gbitmap_get_bounds(cat).size : GSize(SPRITE_W, SPRITE_H);
-  int cat_x = (SCREEN_W - cat_size.w) / 2;
-  int cat_y = GROUND_OFFSET - cat_size.h + s_jump_offset;
+  if (state->is_dead) {
+    GBitmap *tombstone = sprites_get_slot(0);
+    GSize ts = tombstone ? gbitmap_get_bounds(tombstone).size : GSize(SPRITE_W, SPRITE_H);
+    int cat_x = (SCREEN_W - ts.w) / 2;
+    int cat_y = GROUND_OFFSET - ts.h + s_jump_offset;
 
-  if (state->pet_state == PET_STATE_ENERGETIC && s_butterfly_bitmap) {
-    GSize bf = gbitmap_get_bounds(s_butterfly_bitmap).size;
-    int bx = cat_x + cat_size.w + BUTTERFLY_OFFSET_X + (s_anim_frame % 3) * 2;
-    int by = cat_y - BUTTERFLY_OFFSET_Y + (s_anim_frame % 2) * 3;
-    if (bx + bf.w > SCREEN_W) {
-      bx = SCREEN_W - bf.w;
+    if (tombstone) {
+      graphics_draw_bitmap_in_rect(ctx, tombstone, GRect(cat_x, cat_y, ts.w, ts.h));
     }
-    graphics_draw_bitmap_in_rect(ctx, s_butterfly_bitmap, GRect(bx, by, bf.w, bf.h));
+
+    if (s_ghost_bitmap) {
+      GSize gs = gbitmap_get_bounds(s_ghost_bitmap).size;
+      int ghost_y = cat_y - gs.h + GHOST_FLOAT_OFFSET
+          + ((s_ghost_frame % 2) ? -GHOST_FLOAT_RANGE : GHOST_FLOAT_RANGE);
+      if (ghost_y < 0) {
+        ghost_y = 0;
+      }
+      graphics_draw_bitmap_in_rect(ctx, s_ghost_bitmap,
+                                   GRect((SCREEN_W - gs.w) / 2, ghost_y, gs.w, gs.h));
+    }
+    return;
   }
 
-  if (cat) {
-    graphics_draw_bitmap_in_rect(ctx, cat, GRect(cat_x, cat_y, cat_size.w, cat_size.h));
-  }
+  int speech_cat_x = (SCREEN_W - SPRITE_W) / 2;
+  int speech_cat_y = GROUND_OFFSET - SPRITE_H + s_jump_offset;
 
-  if (state->pet_state == PET_STATE_DEAD && s_ghost_bitmap) {
-    GSize gs = gbitmap_get_bounds(s_ghost_bitmap).size;
-    int ghost_y = cat_y - gs.h + GHOST_FLOAT_OFFSET + ((s_ghost_frame % 2) ? -GHOST_FLOAT_RANGE : GHOST_FLOAT_RANGE);
-    if (ghost_y < 0) {
-      ghost_y = 0;
+  for (int i = 0; i < state->cat_count; i++) {
+    GBitmap *cat = sprites_get_slot(i);
+    GSize cat_size = cat ? gbitmap_get_bounds(cat).size : GSize(SPRITE_W, SPRITE_H);
+    int cat_x = s_cats[i].x;
+    int cat_y = GROUND_OFFSET - cat_size.h + s_jump_offset;
+
+    if (i == 0) {
+      speech_cat_x = cat_x;
+      speech_cat_y = cat_y;
     }
-    graphics_draw_bitmap_in_rect(ctx, s_ghost_bitmap,
-                                 GRect((SCREEN_W - gs.w) / 2, ghost_y, gs.w, gs.h));
+
+    if (i == 0 && state->pet_state == PET_STATE_ENERGETIC && s_butterfly_bitmap) {
+      GSize bf = gbitmap_get_bounds(s_butterfly_bitmap).size;
+      int bx = cat_x + cat_size.w + BUTTERFLY_OFFSET_X + (s_anim_frame % 3) * 2;
+      int by = cat_y - BUTTERFLY_OFFSET_Y + (s_anim_frame % 2) * 3;
+      if (bx + bf.w > SCREEN_W) {
+        bx = SCREEN_W - bf.w;
+      }
+      graphics_draw_bitmap_in_rect(ctx, s_butterfly_bitmap, GRect(bx, by, bf.w, bf.h));
+    }
+
+    prv_draw_cat_at(ctx, cat, cat_x, cat_y);
+
+    if (i == 0 && state->pet_state == PET_STATE_LOW_BATTERY) {
+      prv_draw_battery_icon(ctx, cat_x + cat_size.w - BATTERY_OFFSET_X,
+                            cat_y - BATTERY_OFFSET_Y, s_battery_flash);
+    }
   }
 
   if (s_flick_interrupt) {
-    prv_draw_speech_bubble(ctx, cat_x, cat_y);
-  }
-
-  if (state->pet_state == PET_STATE_LOW_BATTERY) {
-    prv_draw_battery_icon(ctx, cat_x + cat_size.w - BATTERY_OFFSET_X, cat_y - BATTERY_OFFSET_Y, s_battery_flash);
+    prv_draw_speech_bubble(ctx, speech_cat_x, speech_cat_y);
   }
 }
 
@@ -327,8 +425,6 @@ static void prv_hud_update_proc(Layer *layer, GContext *ctx) {
   if (s_fish_skeleton) {
     graphics_draw_bitmap_in_rect(ctx, s_fish_skeleton, GRect(bar_x, bar_y, bar.w, bar.h));
   }
-  // Drawing the meat into a narrower rect clips it from the left,
-  // revealing the fish progressively as steps accumulate.
   if (s_fish_meat && fill_w > 0) {
     graphics_draw_bitmap_in_rect(ctx, s_fish_meat, GRect(bar_x, bar_y, fill_w, bar.h));
   }
@@ -369,11 +465,16 @@ static void prv_update_steps_text(void) {
 
 static void prv_refresh_ui(bool start_anim) {
   const GameState *state = game_get_state();
-  const GameSettings *settings = game_get_settings();
 
-  sprites_set_breed(settings->cat_breed);
   if (!s_anim_active) {
-    sprites_load_frame(state->pet_state, 0);
+    prv_load_cat_sprites(state->pet_state, false);
+  }
+
+  if (state->is_dead) {
+    sprites_load_slot(0, game_get_settings()->cat_breed, PET_STATE_DEAD, 0, CAT_FACING_RIGHT);
+    if (!s_ghost_bitmap) {
+      s_ghost_bitmap = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_GHOST_0);
+    }
   }
 
   prv_update_clock();
@@ -387,16 +488,17 @@ static void prv_refresh_ui(bool start_anim) {
 }
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  // game_update() detects day rollover itself (idempotent), so the
-  // DAY_UNIT case needs no special handling here.
   game_update();
   prv_refresh_ui(units_changed & MINUTE_UNIT);
 }
 
 static void prv_health_handler(HealthEventType event, void *context) {
-  if (event == HealthEventMovementUpdate) {
+  if (event == HealthEventMovementUpdate || event == HealthEventSignificantUpdate) {
     game_update();
     prv_update_steps_text();
+    if (!s_anim_active) {
+      prv_load_cat_sprites(game_get_state()->pet_state, false);
+    }
     prv_request_redraw();
   }
 }
@@ -420,8 +522,6 @@ static void prv_accel_tap_handler(AccelAxisType axis, int32_t direction) {
 
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   game_on_settings_received(iter);
-  const GameSettings *settings = game_get_settings();
-  sprites_set_breed(settings->cat_breed);
   prv_refresh_ui(true);
 }
 
@@ -431,6 +531,8 @@ static void prv_inbox_dropped(AppMessageResult reason, void *context) {
 
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
+
+  srand((unsigned int)time(NULL));
 
   s_time_layer = text_layer_create(GRect(0, TIME_LAYER_Y, SCREEN_W, TIME_LAYER_H));
   text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_TIME));
@@ -465,7 +567,6 @@ static void prv_window_load(Window *window) {
   s_fish_meat = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_FISH_MEAT);
 
   sprites_init();
-  sprites_set_breed(game_get_settings()->cat_breed);
   game_update();
   prv_refresh_ui(true);
 }

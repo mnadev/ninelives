@@ -62,9 +62,9 @@ BASE_CHARS = {
 # A inner ear, T tail, e eye, n nose, p paw.
 BREEDS = {
     "orange": {"o": 1, "B": 3, "b": 5, "s": 4, "A": 11, "T": 3, "e": 14, "n": 11, "p": 5},
-    "tuxedo": {"o": 8, "B": 1, "b": 2, "s": 1, "A": 11, "T": 1, "e": 13, "n": 11, "p": 2},
+    "tuxedo": {"o": 9, "B": 1, "b": 2, "s": 1, "A": 11, "T": 1, "e": 13, "n": 11, "p": 2},
     "siamese": {"o": 1, "B": 5, "b": 2, "s": 6, "A": 7, "T": 7, "e": 12, "n": 7, "p": 7},
-    "void": {"o": 8, "B": 1, "b": 1, "s": 1, "A": 8, "T": 1, "e": 13, "n": 8, "p": 1},
+    "void": {"o": 9, "B": 1, "b": 1, "s": 1, "A": 9, "T": 1, "e": 13, "n": 9, "p": 1},
 }
 
 GRID_W = 24
@@ -73,51 +73,51 @@ GRID_W = 24
 # Cat templates (24 wide). Cat faces right. Bottom row touches the ground.
 # ---------------------------------------------------------------------------
 
-# Cute cat templates (24 wide). Cat faces right. Bottom row touches the ground.
-# Chars: i=eye shine, c=blush, m=omega mouth, v=whisker, T=curled tail.
+# Side-profile walk (24 wide). Cat faces right; tail on the left.
+# Chars: i=eye shine, m=omega mouth, T=curled tail.
 
 WALK_TOP = [
-    "...........oo...oo",
-    "..........oAAo.oAAo",
-    ".........oABBooBBAo",
-    "........oBBBBBBBBBBo",
-    ".......oBBBBBBBBBBBBo",
-    "......oBBeeiBBeeiBBo",
-    ".....oBBccBBnnBBccBBo",
-    ".....oBBBBBBmmBBBBBo",
-    "....oBBBBBBBBBBBBBBo",
-    "....oBBBBBBBBBBBBBBo",
-    "...oBBsBBsBBsBBsBBBBo",
-    "..oBBBBBBBBBBBBBBBBo",
-    "..oBBBBBBBBBBBBBBBBo",
-    "...oBBBBBBBBBBBBBBo",
-    "....ooBBBBBBBBBBoo",
-    "......oTTTo",
+    "oTTTo",
+    ".oBBBBBBBBBBBBBBo",
+    "..oBBBBBBBBBBBBBBBoo",
+    "...oBBBBBBBBBBBBBBBBo",
+    "....oBBsBBBBBBBBBBBBo",
+    ".....oBBBBBBBBBBBBo",
+    "......oBBBBBBBBBBBoooo",
+    ".......oBBBBmmBBBBo",
+    "........oBBBnnBBBBo",
+    ".........oBBBeBBBBo",
+    "..........oBBBBBBBBo",
+    "...........oABBooBBo",
+    "............oAAo.oAAo",
 ]
 
 WALK_LEGS = [
-    [  # frame 0: stride out
-        "....oBBo.....oBBo",
-        "...oBBo.......oBBo",
-        "...oppo.......oppo",
-        "....oo.........oo",
+    [  # frame 0: stride out (front legs reach right)
+        "....oBBo.......oBBo",
+        "...oppo.........oppo",
+        "....oo...........oo",
+        "",
         "",
     ],
-    [  # frame 1: neutral
-        ".....oBBo...oBBo",
-        ".....oBBo...oBBo",
-        ".....oppo...oppo",
-        "......oo.....oo",
+    [  # frame 1: neutral stance
+        ".....oBBo.....oBBo",
+        ".....oppo.....oppo",
+        "......oo.......oo",
+        "",
         "",
     ],
-    [  # frame 2: tuck
-        "......oBBo..oBBo",
-        "......oBBo..oBBo",
-        "......oppo..oppo",
-        ".......oo....oo",
+    [  # frame 2: tuck (front legs tuck)
+        "......oBBo...oBBo",
+        "......oppo...oppo",
+        ".......oo.....oo",
+        "",
         "",
     ],
 ]
+
+# Subtle body bob per walk frame (empty rows prepended).
+WALK_BOB = [0, 1, 0]
 
 # Sitting cat (idle). Frame 1 blinks.
 SIT = [
@@ -373,7 +373,8 @@ def apply_cells(rows: list[str], cells: dict[tuple[int, int], str] | list[tuple[
 
 
 def make_walk(frame: int) -> list[str]:
-    return WALK_TOP + WALK_LEGS[frame]
+    bob = [""] * WALK_BOB[frame]
+    return bob + WALK_TOP + WALK_LEGS[frame]
 
 
 def make_sit(frame: int) -> list[str]:
@@ -475,6 +476,13 @@ def save_sprite(img: Image.Image, base_filename: str, scale: int,
         save_png(img, OUT_DIR / emery_filename)
 
 
+def save_sprite_mirrored(img: Image.Image, base_filename: str, scale: int,
+                         resources: list, generated: dict[str, Image.Image]) -> None:
+    """Save a horizontally mirrored variant (left-facing)."""
+    mirrored = img.transpose(Image.FLIP_LEFT_RIGHT)
+    save_sprite(mirrored, base_filename, scale, resources, generated)
+
+
 def make_preview(images: dict[str, Image.Image]) -> None:
     """Contact sheet on a checkerboard to spot transparency problems."""
     scale = 3
@@ -514,6 +522,7 @@ def main() -> None:
         "sleep": (2, make_sleep),
         "charging": (2, make_charging),
     }
+    mirror_anims = {"walk", "idle"}
 
     for scale in (2, 3):
         for breed in BREEDS:
@@ -523,6 +532,9 @@ def main() -> None:
                     filename = f"cat_{breed}_{anim}_{frame}.png"
                     img = render(factory(frame), cm, GRID_W, scale=scale)
                     save_sprite(img, filename, scale, resources, generated)
+                    if anim in mirror_anims:
+                        left_filename = f"cat_{breed}_{anim}_left_{frame}.png"
+                        save_sprite_mirrored(img, left_filename, scale, resources, generated)
 
         shared_cm = charmap_for(None)
         shared: dict[str, Image.Image] = {

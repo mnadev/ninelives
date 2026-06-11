@@ -24,6 +24,7 @@
 #define DEFAULT_ACTIVE_END 22
 #define RESURRECTION_STEPS 1000
 #define LOW_BATTERY_THRESHOLD 10
+#define MAX_CATS 3
 
 #define PERSIST_KEY_STEP_GOAL 1
 #define PERSIST_KEY_CAT_BREED 2
@@ -33,6 +34,10 @@
 #define PERSIST_KEY_IS_DEAD 6
 #define PERSIST_KEY_LAST_EVAL_DAY 7
 #define PERSIST_KEY_LAST_DAY_STEPS 8
+#define PERSIST_KEY_CAT_COUNT 9
+#define PERSIST_KEY_LAST_REWARD_DAY 10
+#define PERSIST_KEY_CACHED_GOAL 11
+#define PERSIST_KEY_CACHED_GOAL_DAY 12
 
 typedef enum {
   CAT_BREED_ORANGE = 0,
@@ -58,12 +63,6 @@ typedef enum {
   NUM_PET_STATES
 } PetState;
 
-typedef enum {
-  SKY_DAY = 0,
-  SKY_SUNSET,
-  SKY_NIGHT
-} SkyPhase;
-
 typedef struct {
   int32_t step_goal;
   CatBreed cat_breed;
@@ -79,7 +78,7 @@ typedef struct {
   float progress;
   float pace_ratio;
   PetState pet_state;
-  SkyPhase sky_phase;
+  int cat_count;
   bool is_dead;
   bool is_sleeping;
   bool is_charging;
@@ -95,16 +94,18 @@ void game_reload_settings(void);
 void game_update(void);
 void game_on_day_change(void);
 void game_on_settings_received(DictionaryIterator *iter);
+void game_invalidate_goal_cache(void);
 
 const GameSettings *game_get_settings(void);
 const GameState *game_get_state(void);
 
 int32_t game_get_step_goal(void);
+CatBreed game_get_cat_breed_for_slot(int slot);
 PetState game_compute_pace_state(int32_t steps, int32_t goal);
-SkyPhase game_get_sky_phase(int hour);
 int game_get_day_number(void);
 
 #ifdef STEP_OR_DED_DEBUG
 void game_debug_force_state(PetState state);
 void game_debug_force_steps(int32_t steps);
+void game_debug_force_cat_count(int count);
 #endif
