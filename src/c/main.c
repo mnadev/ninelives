@@ -1,3 +1,4 @@
+// Cats wander when the mood is right.
 #include <pebble.h>
 #include <stdlib.h>
 #include "game.h"
