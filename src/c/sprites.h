@@ -12,8 +12,9 @@ typedef enum {
   NUM_SPRITE_ANIMS
 } SpriteAnim;
 
+// Nominal cat sprite size; actual bitmaps vary by pose, use gbitmap_get_bounds.
 #define SPRITE_W 48
-#define SPRITE_H 44
+#define SPRITE_H 40
 
 void sprites_init(void);
 void sprites_deinit(void);

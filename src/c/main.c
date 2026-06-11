@@ -78,6 +78,10 @@ static void prv_anim_timer_callback(void *data) {
         bframe == 0 ? RESOURCE_ID_IMAGE_BUTTERFLY_0 : RESOURCE_ID_IMAGE_BUTTERFLY_1);
   }
 
+  if (state->pet_state == PET_STATE_LOW_BATTERY) {
+    s_battery_flash = !s_battery_flash;
+  }
+
   s_anim_elapsed_ms += ANIM_INTERVAL_MS;
   prv_request_redraw();
 
@@ -117,15 +121,15 @@ static void prv_draw_sky(GContext *ctx, SkyPhase phase) {
   switch (phase) {
     case SKY_DAY:
       top = GColorVividCerulean;
-      bottom = GColorMelon;
+      bottom = GColorCeleste;
       break;
     case SKY_SUNSET:
       top = GColorOrange;
-      bottom = GColorRajah;
+      bottom = GColorChromeYellow;
       break;
     default:
       top = GColorOxfordBlue;
-      bottom = GColorDarkGray;
+      bottom = GColorImperialPurple;
       break;
   }
 
@@ -146,20 +150,28 @@ static void prv_draw_sky(GContext *ctx, SkyPhase phase) {
 }
 
 static void prv_draw_ground(GContext *ctx) {
-  graphics_context_set_stroke_color(ctx, GColorDarkGreen);
-  graphics_draw_line(ctx, GPoint(0, GROUND_Y - HEADER_H), GPoint(SCREEN_W, GROUND_Y - HEADER_H));
   graphics_context_set_fill_color(ctx, GColorJaegerGreen);
-  graphics_fill_rect(ctx, GRect(0, GROUND_Y - HEADER_H + 1, SCREEN_W, STAGE_H - (GROUND_Y - HEADER_H)), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(0, GROUND_OFFSET, SCREEN_W, STAGE_H - GROUND_OFFSET), 0, GCornerNone);
+  graphics_context_set_stroke_color(ctx, GColorDarkGreen);
+  graphics_draw_line(ctx, GPoint(0, GROUND_OFFSET), GPoint(SCREEN_W, GROUND_OFFSET));
 }
 
 static void prv_draw_speech_bubble(GContext *ctx, int cat_x, int cat_y) {
+  int bx = cat_x + 26;
+  int by = cat_y - 18;
+  if (by < 2) {
+    by = 2;
+  }
+  if (bx + 38 > SCREEN_W) {
+    bx = SCREEN_W - 38;
+  }
   graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_fill_rect(ctx, GRect(cat_x + 8, cat_y - 18, 34, 14), 4, GCornersAll);
+  graphics_fill_rect(ctx, GRect(bx, by, 36, 16), 4, GCornersAll);
   graphics_context_set_stroke_color(ctx, GColorBlack);
-  graphics_draw_round_rect(ctx, GRect(cat_x + 8, cat_y - 18, 34, 14), 4);
+  graphics_draw_round_rect(ctx, GRect(bx, by, 36, 16), 4);
   graphics_context_set_text_color(ctx, GColorBlack);
-  graphics_draw_text(ctx, "meow", fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(cat_x + 10, cat_y - 17, 30, 14), GTextOverflowModeTrailingEllipsis,
+  graphics_draw_text(ctx, "meow!", fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                     GRect(bx + 1, by - 2, 34, 16), GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);
 }
 
@@ -181,25 +193,36 @@ static void prv_stage_update_proc(Layer *layer, GContext *ctx) {
   prv_draw_sky(ctx, state->sky_phase);
   prv_draw_ground(ctx);
 
-  int cat_x = (SCREEN_W - SPRITE_W) / 2;
-  int cat_y = (GROUND_Y - HEADER_H) - SPRITE_H + s_jump_offset;
+  // Bitmaps have transparent backgrounds; GCompOpSet honors their alpha.
+  graphics_context_set_compositing_mode(ctx, GCompOpSet);
+
+  // Bottom-align every sprite on the ground line using its real size.
+  GSize cat_size = cat ? gbitmap_get_bounds(cat).size : GSize(SPRITE_W, SPRITE_H);
+  int cat_x = (SCREEN_W - cat_size.w) / 2;
+  int cat_y = GROUND_OFFSET - cat_size.h + s_jump_offset;
 
   if (state->pet_state == PET_STATE_ENERGETIC && s_butterfly_bitmap) {
-    int bx = cat_x + 28 + (s_anim_frame % 3) * 2;
-    int by = (GROUND_Y - HEADER_H) - 28;
-    graphics_draw_bitmap_in_rect(ctx, s_butterfly_bitmap, GRect(bx, by, 12, 10));
+    GSize bf = gbitmap_get_bounds(s_butterfly_bitmap).size;
+    int bx = cat_x + cat_size.w + 4 + (s_anim_frame % 3) * 2;
+    int by = cat_y - 6 + (s_anim_frame % 2) * 3;
+    if (bx + bf.w > SCREEN_W) {
+      bx = SCREEN_W - bf.w;
+    }
+    graphics_draw_bitmap_in_rect(ctx, s_butterfly_bitmap, GRect(bx, by, bf.w, bf.h));
   }
 
-  if (state->pet_state == PET_STATE_DEAD) {
-    if (cat) {
-      graphics_draw_bitmap_in_rect(ctx, cat, GRect(cat_x, cat_y + 4, SPRITE_W, SPRITE_H));
+  if (cat) {
+    graphics_draw_bitmap_in_rect(ctx, cat, GRect(cat_x, cat_y, cat_size.w, cat_size.h));
+  }
+
+  if (state->pet_state == PET_STATE_DEAD && s_ghost_bitmap) {
+    GSize gs = gbitmap_get_bounds(s_ghost_bitmap).size;
+    int ghost_y = cat_y - gs.h + 6 + ((s_ghost_frame % 2) ? -2 : 2);
+    if (ghost_y < 0) {
+      ghost_y = 0;
     }
-    if (s_ghost_bitmap) {
-      int ghost_y = cat_y - 8 + ((s_ghost_frame % 2) ? -2 : 2);
-      graphics_draw_bitmap_in_rect(ctx, s_ghost_bitmap, GRect(cat_x + 8, ghost_y, 32, 28));
-    }
-  } else if (cat) {
-    graphics_draw_bitmap_in_rect(ctx, cat, GRect(cat_x, cat_y, SPRITE_W, SPRITE_H));
+    graphics_draw_bitmap_in_rect(ctx, s_ghost_bitmap,
+                                 GRect((SCREEN_W - gs.w) / 2, ghost_y, gs.w, gs.h));
   }
 
   if (s_flick_interrupt) {
@@ -207,7 +230,7 @@ static void prv_stage_update_proc(Layer *layer, GContext *ctx) {
   }
 
   if (state->pet_state == PET_STATE_LOW_BATTERY) {
-    prv_draw_battery_icon(ctx, cat_x + 18, cat_y + 6, s_battery_flash);
+    prv_draw_battery_icon(ctx, cat_x + cat_size.w - 6, cat_y - 2, s_battery_flash);
   }
 }
 
@@ -217,24 +240,26 @@ static void prv_hud_update_proc(Layer *layer, GContext *ctx) {
 
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
+  graphics_context_set_compositing_mode(ctx, GCompOpSet);
 
-  int bar_x = bounds.size.w - 74;
-  int bar_y = 10;
-  int bar_w = 64;
-  int bar_h = 16;
-  int fill_w = (int)(bar_w * state->progress);
+  GSize bar = s_fish_skeleton ? gbitmap_get_bounds(s_fish_skeleton).size : GSize(64, 16);
+  int bar_x = bounds.size.w - bar.w - 6;
+  int bar_y = (bounds.size.h - bar.h) / 2;
+  int fill_w = (int)(bar.w * state->progress);
   if (fill_w < 0) {
     fill_w = 0;
   }
-  if (fill_w > bar_w) {
-    fill_w = bar_w;
+  if (fill_w > bar.w) {
+    fill_w = bar.w;
   }
 
   if (s_fish_skeleton) {
-    graphics_draw_bitmap_in_rect(ctx, s_fish_skeleton, GRect(bar_x, bar_y, bar_w, bar_h));
+    graphics_draw_bitmap_in_rect(ctx, s_fish_skeleton, GRect(bar_x, bar_y, bar.w, bar.h));
   }
+  // Drawing the meat into a narrower rect clips it from the left,
+  // revealing the fish progressively as steps accumulate.
   if (s_fish_meat && fill_w > 0) {
-    graphics_draw_bitmap_in_rect(ctx, s_fish_meat, GRect(bar_x, bar_y, fill_w, bar_h));
+    graphics_draw_bitmap_in_rect(ctx, s_fish_meat, GRect(bar_x, bar_y, fill_w, bar.h));
   }
 }
 
@@ -249,6 +274,9 @@ static void prv_update_clock(void) {
     strftime(time_buffer, sizeof(time_buffer), "%H:%M", tm_info);
   } else {
     strftime(time_buffer, sizeof(time_buffer), "%I:%M", tm_info);
+    if (time_buffer[0] == '0') {
+      memmove(time_buffer, time_buffer + 1, strlen(time_buffer));
+    }
   }
   text_layer_set_text(s_time_layer, time_buffer);
 
@@ -288,10 +316,8 @@ static void prv_refresh_ui(bool start_anim) {
 }
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  if (units_changed & DAY_UNIT) {
-    game_on_day_change();
-  }
-
+  // game_update() detects day rollover itself (idempotent), so the
+  // DAY_UNIT case needs no special handling here.
   game_update();
   prv_refresh_ui(units_changed & MINUTE_UNIT);
 }
@@ -335,14 +361,15 @@ static void prv_inbox_dropped(AppMessageResult reason, void *context) {
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
 
-  s_time_layer = text_layer_create(GRect(0, 2, SCREEN_W, 28));
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_LECO_38_BOLD_NUMBERS));
+  // LECO 36 needs ~40px of layer height; -2 offset trims internal padding.
+  s_time_layer = text_layer_create(GRect(0, -2, SCREEN_W, 40));
+  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_LECO_36_BOLD_NUMBERS));
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
   text_layer_set_background_color(s_time_layer, GColorClear);
   text_layer_set_text_color(s_time_layer, GColorWhite);
   layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
 
-  s_date_layer = text_layer_create(GRect(0, 28, SCREEN_W, 16));
+  s_date_layer = text_layer_create(GRect(0, 34, SCREEN_W, 18));
   text_layer_set_font(s_date_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
   text_layer_set_text_alignment(s_date_layer, GTextAlignmentCenter);
   text_layer_set_background_color(s_date_layer, GColorClear);
@@ -357,7 +384,7 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_hud_layer, prv_hud_update_proc);
   layer_add_child(window_layer, s_hud_layer);
 
-  s_steps_layer = text_layer_create(GRect(4, HEADER_H + STAGE_H + 10, 60, 20));
+  s_steps_layer = text_layer_create(GRect(4, HEADER_H + STAGE_H + 7, 66, 24));
   text_layer_set_font(s_steps_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_background_color(s_steps_layer, GColorClear);
   text_layer_set_text_color(s_steps_layer, GColorWhite);

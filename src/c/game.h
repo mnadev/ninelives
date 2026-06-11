@@ -4,10 +4,11 @@
 
 #define SCREEN_W 144
 #define SCREEN_H 168
-#define HEADER_H 42
-#define STAGE_H 84
-#define HUD_H 42
-#define GROUND_Y (HEADER_H + STAGE_H - 10)
+#define HEADER_H 52
+#define STAGE_H 76
+#define HUD_H 40
+// Ground line, relative to the stage layer's coordinate space.
+#define GROUND_OFFSET (STAGE_H - 10)
 
 #define DEFAULT_STEP_GOAL 10000
 #define DEFAULT_ACTIVE_START 8

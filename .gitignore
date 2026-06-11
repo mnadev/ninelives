@@ -3,3 +3,4 @@ node_modules/
 .DS_Store
 *.pbw
 .lock-waf_*
+tools/preview.png

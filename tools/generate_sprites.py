@@ -1,311 +1,530 @@
 #!/usr/bin/env python3
-"""Generate palettized pixel-art sprites for the Step or Ded watchface."""
+"""Generate palettized pixel-art sprites for the Step or Ded watchface.
+
+Sprites are defined as character grids mapped directly to palette indices,
+rendered at 2x scale, and saved as 4-bit palettized PNGs with a tRNS
+transparency chunk so the Pebble resource compiler preserves alpha.
+"""
 
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "resources" / "images"
+PREVIEW_PATH = ROOT / "tools" / "preview.png"
 
-# Pebble-friendly palette (subset of 64-color e-paper colors).
-PALETTE = [
-    (0, 0, 0, 0),
-    (0, 0, 0, 255),
-    (255, 255, 255, 255),
-    (170, 85, 0, 255),
-    (255, 170, 0, 255),
-    (255, 204, 102, 255),
-    (85, 51, 17, 255),
-    (204, 136, 68, 255),
-    (255, 221, 170, 255),
-    (51, 51, 51, 255),
-    (102, 102, 102, 255),
-    (170, 170, 170, 255),
-    (255, 85, 85, 255),
-    (0, 170, 255, 255),
-    (0, 85, 170, 255),
-    (255, 255, 0, 255),
+# All colors are valid RGB222 Pebble colors (channels in {0, 85, 170, 255}).
+PALETTE: list[tuple[int, int, int, int]] = [
+    (0, 0, 0, 0),          # 0  transparent
+    (0, 0, 0, 255),        # 1  black
+    (255, 255, 255, 255),  # 2  white
+    (255, 170, 0, 255),    # 3  orange
+    (170, 85, 0, 255),     # 4  brown
+    (255, 255, 170, 255),  # 5  cream
+    (255, 170, 85, 255),   # 6  tan
+    (85, 0, 0, 255),       # 7  dark brown
+    (85, 85, 85, 255),     # 8  dark gray
+    (170, 170, 170, 255),  # 9  light gray
+    (255, 0, 0, 255),      # 10 red
+    (255, 85, 85, 255),    # 11 pink
+    (85, 170, 255, 255),   # 12 light blue
+    (255, 255, 0, 255),    # 13 yellow
+    (0, 170, 0, 255),      # 14 green
+    (255, 255, 255, 170),  # 15 translucent white (ghost)
 ]
 
-BREEDS = {
-    "orange": {
-        "body": 3,
-        "belly": 7,
-        "stripe": 5,
-        "ear": 5,
-        "eye": 1,
-        "nose": 11,
-        "paw": 7,
-    },
-    "tuxedo": {
-        "body": 1,
-        "belly": 2,
-        "stripe": 1,
-        "ear": 1,
-        "eye": 2,
-        "nose": 11,
-        "paw": 2,
-    },
-    "siamese": {
-        "body": 7,
-        "belly": 8,
-        "stripe": 5,
-        "ear": 5,
-        "eye": 1,
-        "nose": 11,
-        "paw": 8,
-    },
-    "void": {
-        "body": 1,
-        "belly": 1,
-        "stripe": 1,
-        "ear": 1,
-        "eye": 15,
-        "nose": 11,
-        "paw": 1,
-    },
+# Shared characters available in every template.
+BASE_CHARS = {
+    ".": 0,
+    "k": 1,   # black
+    "W": 2,   # white
+    "z": 2,   # Zzz text
+    "x": 6,   # cardboard
+    "y": 4,   # cardboard shading
+    "G": 9,   # tombstone slab
+    "h": 8,   # tombstone shadow
+    "d": 12,  # sweat drop
+    "w": 15,  # ghost body
+    "r": 10,  # red
+    "f": 13,  # butterfly wing
+    "u": 12,  # butterfly wing alt
 }
 
+# Per-breed characters: o outline, B body, b belly/chest, s stripe,
+# A inner ear, T tail, e eye, n nose, p paw.
+BREEDS = {
+    "orange": {"o": 1, "B": 3, "b": 5, "s": 4, "A": 11, "T": 3, "e": 14, "n": 11, "p": 5},
+    "tuxedo": {"o": 8, "B": 1, "b": 2, "s": 1, "A": 11, "T": 1, "e": 13, "n": 11, "p": 2},
+    "siamese": {"o": 1, "B": 5, "b": 2, "s": 6, "A": 7, "T": 7, "e": 12, "n": 7, "p": 7},
+    "void": {"o": 8, "B": 1, "b": 1, "s": 1, "A": 8, "T": 1, "e": 13, "n": 8, "p": 1},
+}
 
-def nearest_palette_index(rgba: tuple[int, int, int, int]) -> int:
-    best = 0
-    best_dist = 1 << 30
-    for i, color in enumerate(PALETTE):
-        dr = rgba[0] - color[0]
-        dg = rgba[1] - color[1]
-        db = rgba[2] - color[2]
-        dist = dr * dr + dg * dg + db * db
-        if dist < best_dist:
-            best_dist = dist
-            best = i
-    return best
+GRID_W = 24
+
+# ---------------------------------------------------------------------------
+# Cat templates (24 wide). Cat faces right. Bottom row touches the ground.
+# ---------------------------------------------------------------------------
+
+# Standing body shared by walk/distressed poses (rows 0-15 of a 20-row grid).
+WALK_TOP = [
+    "..........oo....oo",
+    ".........oAAo..oAAo",
+    ".........oABBooBBAo",
+    "........oBBBBBBBBBBo",
+    "........oBBBBBBBBBBo",
+    ".oo.....oBBeeBBeeBBo",
+    "oTTo....oBBBBnnBBBBo",
+    "oTo.ooooooBBBBBBBBo",
+    ".oTBBBBBBBBBBBBBBBBo",
+    "..oBBsBBsBBsBBsBBBBo",
+    "..oBBsBBsBBsBBsBBBBo",
+    "..oBBBBBBBBBBBBBBBBo",
+    "..oBBBBBBBBBBBBBBBBo",
+    "...oBBBBBBBBBBBBBBo",
+    "....ooBBBBBBBBBBoo",
+]
+
+WALK_LEGS = [
+    [  # frame 0: stride out
+        "....oBBo.....oBBo",
+        "...oBBo.......oBBo",
+        "...oppo.......oppo",
+        "....oo.........oo",
+        "",
+    ],
+    [  # frame 1: neutral
+        ".....oBBo...oBBo",
+        ".....oBBo...oBBo",
+        ".....oppo...oppo",
+        "......oo.....oo",
+        "",
+    ],
+    [  # frame 2: tuck
+        "......oBBo..oBBo",
+        "......oBBo..oBBo",
+        "......oppo..oppo",
+        ".......oo....oo",
+        "",
+    ],
+]
+
+# Sitting cat (idle). Frame 1 blinks.
+SIT = [
+    "..........oo....oo",
+    ".........oAAo..oAAo",
+    ".........oABBooBBAo",
+    "........oBBBBBBBBBBo",
+    "........oBBBBBBBBBBo",
+    "........oBBeeBBeeBBo",
+    "........oBBBBnnBBBBo",
+    ".........oBBBBBBBBo",
+    "........oBBBBBBBBBBo",
+    ".......oBBBBBbbBBBBo",
+    ".......oBBBBbbbbBBBo",
+    "......oBBsBBbbbbBBBo",
+    "......oBBsBBbbbbBBBo",
+    ".....oBBBsBBbbbbBBBo",
+    ".....oBBBBBBbbbbBBBo",
+    "....oBBBBBBBBBBBBBBo",
+    "....oBBBBBBBBBBBBBBo",
+    "....oBBBBBoBBBBoBBBo",
+    ".oooBBBBBBoBppoBppBo",
+    "oTTTooooooooooooooo",
+]
+
+# Distressed: standing, ears flat, sad eyes, frown, drooping tail.
+DISTRESSED = [
+    "",
+    "",
+    "........oo......oo",
+    ".......oAAooooooAAo",
+    ".......oBBBBBBBBBBo",
+    ".......oBeeBBBBeeBo",
+    ".......oBBBBnnBBBBo",
+    ".......oBBBooooBBBo",
+    "........oBBBBBBBBo",
+    ".......ooBBBBBBBBoo",
+    "......oBBsBBsBBsBBBo",
+    ".oo...oBBBBBBBBBBBBo",
+    ".oTo..oBsBBsBBsBBBBo",
+    "..oTo.oBBBBBBBBBBBo",
+    "..oToBBBBBBBBBBBBBo",
+    "...oBBBBBBBBBBBBBo",
+    "....ooBBBBBBBBBBoo",
+    ".....oBBo....oBBo",
+    ".....oBBo....oBBo",
+    ".....oppo....oppo",
+]
+
+# Sweat drop positions (col, row) per distressed frame.
+DISTRESSED_SWEAT = [
+    [(20, 4), (21, 6)],
+    [(20, 3), (21, 5), (20, 7)],
+]
+
+# Sleeping loaf with Zzz. Two frames move the Zzz.
+SLEEP = [
+    "...................z",
+    ".................zz",
+    "......oo....oo....z",
+    ".....oAAo..oAAo",
+    ".....oABBooBBAo",
+    "....oBBBBBBBBBBo",
+    "....oBooBBBBooBo",
+    "....oBBBBnnBBBBo",
+    "..ooBBBBBBBBBBBoo",
+    ".oBBBBBBBBBBBBBBBo",
+    ".oBssBBssBBssBBBBo",
+    ".oBBBBBBBBBBBBBBBo",
+    "..oBBBBBBBBBBBBBoo",
+    "...ooooooooooooo",
+]
+
+SLEEP_Z_FRAME1 = {
+    (19, 0): ".",
+    (17, 1): ".",
+    (18, 1): ".",
+    (18, 2): ".",
+    (20, 1): "z",
+    (18, 3): "z",
+    (19, 3): "z",
+    (19, 4): "z",
+}
+
+# Charging: cat head peeking out of a cardboard box. Frame 1 sinks 1 row.
+CHARGE_HEAD = [
+    "..........oo....oo",
+    ".........oAAo..oAAo",
+    ".........oABBooBBAo",
+    "........oBBBBBBBBBBo",
+    "........oBooBBBBooBo",
+    "........oBBBBnnBBBBo",
+    ".........oBBBBBBBBo",
+]
+
+CHARGE_BOX = [
+    "..oooooooooooooooooo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxyyyyyyyyyyyyyyxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oxxxxxxxxxxxxxxxxo",
+    "..oooooooooooooooooo",
+]
+
+TOMBSTONE = [
+    "......oooooooo",
+    "....ooGGGGGGGGoo",
+    "...oGGGGGGGGGGGGGo",
+    "...oGGGGGGGGGGGGGo",
+    "...oGkkGGkkkGkkkGo",
+    "...oGkGkGGkGGkGkGo",
+    "...oGkkGGGkGGkkkGo",
+    "...oGkGkGGkGGkGGGo",
+    "...oGkGkGkkkGkGGGo",
+    "...oGGGGGGGGGGGhho",
+    "...oGGGGGGGGGGGhho",
+    "...oGGGGGGGGGGGhho",
+    "...oGGGGGGGGGGGhho",
+    "...oGGGGGGGGGGGhho",
+    "...oGGGGGGGGGGGhho",
+    "...oGGGGGGGGGGGhho",
+    "..oGGGGGGGGGGGGGhho",
+    "..oGGGGGGGGGGGGGhho",
+    ".ohhhhhhhhhhhhhhhhho",
+    "..ooooooooooooooooo",
+]
+
+GHOST_W = 20
+GHOST = [
+    [
+        "....oo......oo",
+        "...owwo....owwo",
+        "...owwwoooowwwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owkkwwwwwwkkwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwkkwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owwowwowwowwowwo",
+        "...o..o..o..o..o",
+        "",
+    ],
+    [
+        "....oo......oo",
+        "...owwo....owwo",
+        "...owwwoooowwwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owkkwwwwwwkkwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwkkwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owwwwwwwwwwwwo",
+        "..owowwowwowwoww",
+        "..o..o..o..o..o",
+        "",
+    ],
+]
+
+BUTTERFLY_W = 6
+BUTTERFLY = [
+    [
+        "ff.ff",
+        "ffkff",
+        ".fkf",
+        "ffkff",
+        "ff.ff",
+    ],
+    [
+        ".f.f",
+        ".fkf",
+        ".fkf",
+        ".fkf",
+        ".f.f",
+    ],
+]
 
 
-def save_palettized(img: Image.Image, path: Path) -> None:
-    rgba = img.convert("RGBA")
-    indexed = Image.new("P", rgba.size)
-    palette_bytes = []
+def build_grid(rows: list[str], width: int, height: int) -> list[str]:
+    grid = [row.ljust(width, ".") for row in rows]
+    for i, row in enumerate(grid):
+        if len(row) > width:
+            raise ValueError(f"row {i} is {len(row)} chars, max {width}: {row!r}")
+    while len(grid) < height:
+        grid.append("." * width)
+    if len(grid) > height:
+        raise ValueError(f"grid has {len(grid)} rows, max {height}")
+    return grid
+
+
+def render(rows: list[str], charmap: dict[str, int], width: int, scale: int = 2) -> Image.Image:
+    grid = build_grid(rows, width, len(rows))
+    h = len(grid)
+    img = Image.new("P", (width * scale, h * scale), 0)
+    palette_bytes: list[int] = []
     for color in PALETTE:
         palette_bytes.extend(color[:3])
-    while len(palette_bytes) < 256 * 3:
-        palette_bytes.append(0)
-    indexed.putpalette(palette_bytes)
+    palette_bytes.extend([0] * (768 - len(palette_bytes)))
+    img.putpalette(palette_bytes)
 
-    src = rgba.load()
-    dst = indexed.load()
-    for y in range(rgba.height):
-        for x in range(rgba.width):
-            dst[x, y] = nearest_palette_index(src[x, y])
+    px = img.load()
+    for y, row in enumerate(grid):
+        for x, ch in enumerate(row):
+            idx = charmap.get(ch)
+            if idx is None:
+                raise ValueError(f"unknown char {ch!r} at ({x},{y})")
+            if idx == 0:
+                continue
+            for dy in range(scale):
+                for dx in range(scale):
+                    px[x * scale + dx, y * scale + dy] = idx
+    return img
 
-    indexed.save(path, optimize=True)
+
+def save_png(img: Image.Image, path: Path) -> None:
+    alpha = bytes(c[3] for c in PALETTE)
+    img.save(path, optimize=True, transparency=alpha)
 
 
-def blank(w: int = 48, h: int = 44) -> Image.Image:
-    return Image.new("RGBA", (w, h), PALETTE[0])
-
-
-def draw_cat(
-    draw: ImageDraw.ImageDraw,
-    colors: dict[str, int],
-    pose: str,
-    frame: int,
-    distressed: bool = False,
-) -> None:
-    body = colors["body"]
-    belly = colors["belly"]
-    stripe = colors["stripe"]
-    ear = colors["ear"]
-    eye = colors["eye"]
-    nose = colors["nose"]
-    paw = colors["paw"]
-
-    if distressed:
-        body = 10
-        belly = 11
-        stripe = 10
-
-    offset_x = 0
-    if pose == "walk":
-        offset_x = [-2, 0, 2][frame % 3]
-    elif pose == "idle":
-        offset_x = [0, 1][frame % 2]
-
-    ox = 8 + offset_x
-    oy = 10
-
-    # Tail
-    draw.line([(ox - 2, oy + 18), (ox - 8, oy + 10), (ox - 10, oy + 4)], fill=body, width=2)
-    # Body
-    draw.ellipse([ox, oy + 10, ox + 26, oy + 30], fill=body)
-    draw.ellipse([ox + 6, oy + 14, ox + 20, oy + 26], fill=belly)
-    # Stripes
-    draw.line([(ox + 8, oy + 12), (ox + 8, oy + 20)], fill=stripe, width=1)
-    draw.line([(ox + 16, oy + 12), (ox + 16, oy + 20)], fill=stripe, width=1)
-    # Head
-    draw.ellipse([ox + 14, oy, ox + 34, oy + 18], fill=body)
-    draw.polygon([(ox + 16, oy + 2), (ox + 14, oy - 4), (ox + 20, oy + 2)], fill=ear)
-    draw.polygon([(ox + 30, oy + 2), (ox + 36, oy - 4), (ox + 28, oy + 2)], fill=ear)
-    # Face
-    draw.ellipse([ox + 22, oy + 8, ox + 24, oy + 10], fill=eye)
-    draw.ellipse([ox + 28, oy + 8, ox + 30, oy + 10], fill=eye)
-    draw.point((ox + 26, oy + 12), fill=nose)
-
-    if pose == "walk":
-        leg_shift = [2, -2, 2][frame % 3]
-        draw.rectangle([ox + 8, oy + 26, ox + 12, oy + 32 + leg_shift], fill=paw)
-        draw.rectangle([ox + 18, oy + 26, ox + 22, oy + 32 - leg_shift], fill=paw)
-    elif pose == "idle" and frame % 2 == 1:
-        draw.arc([ox + 20, oy + 10, ox + 32, oy + 18], 200, 340, fill=belly, width=2)
-        draw.rectangle([ox + 10, oy + 26, ox + 14, oy + 32], fill=paw)
-        draw.rectangle([ox + 18, oy + 26, ox + 22, oy + 32], fill=paw)
-    elif pose == "sleep":
-        draw.ellipse([ox + 4, oy + 16, ox + 30, oy + 30], fill=body)
-        draw.ellipse([ox + 20, oy + 10, ox + 32, oy + 20], fill=body)
-        draw.text((ox + 30, oy - 6), "Z", fill=2)
-        draw.text((ox + 34, oy - 10), "z", fill=2)
-    elif pose == "charging":
-        draw.rectangle([ox - 2, oy + 20, ox + 34, oy + 34], fill=8)
-        draw.rectangle([ox, oy + 18, ox + 32, oy + 22], fill=8)
-        draw.ellipse([ox + 10, oy + 10, ox + 28, oy + 24], fill=body)
-        draw.ellipse([ox + 18, oy + 14, ox + 22, oy + 18], fill=eye)
+def charmap_for(breed: str | None) -> dict[str, int]:
+    cm = dict(BASE_CHARS)
+    if breed is not None:
+        cm.update(BREEDS[breed])
     else:
-        draw.rectangle([ox + 10, oy + 26, ox + 14, oy + 32], fill=paw)
-        draw.rectangle([ox + 18, oy + 26, ox + 22, oy + 32], fill=paw)
-
-    if distressed:
-        draw.ellipse([ox + 34, oy + 4, ox + 38, oy + 8], fill=13)
-        draw.ellipse([ox + 36, oy + 10, ox + 40, oy + 14], fill=13)
-        draw.line([(ox + 12, oy + 30), (ox + 16, oy + 34), (ox + 20, oy + 30)], fill=9, width=2)
+        # Shared sprites still reference outline chars.
+        cm.update({"o": 1, "B": 1, "b": 1, "s": 1, "A": 1, "T": 1, "e": 1, "n": 1, "p": 1})
+    return cm
 
 
-def make_cat_frame(breed: str, anim: str, frame: int) -> Image.Image:
-    img = blank()
-    draw = ImageDraw.Draw(img)
-    colors = BREEDS[breed]
-    distressed = anim == "distressed"
-    pose = {
-        "walk": "walk",
-        "idle": "idle",
-        "distressed": "walk",
-        "sleep": "sleep",
-        "charging": "charging",
-    }[anim]
-    draw_cat(draw, colors, pose, frame, distressed=distressed)
-    return img
+def apply_cells(rows: list[str], cells: dict[tuple[int, int], str] | list[tuple[int, int]],
+                char: str | None = None) -> list[str]:
+    grid = [list(row.ljust(GRID_W, ".")) for row in rows]
+    if isinstance(cells, dict):
+        for (x, y), ch in cells.items():
+            grid[y][x] = ch
+    else:
+        for x, y in cells:
+            grid[y][x] = char
+    return ["".join(row).rstrip(".") for row in grid]
 
 
-def make_tombstone() -> Image.Image:
-    img = blank()
-    draw = ImageDraw.Draw(img)
-    draw.polygon([(18, 8), (30, 8), (34, 38), (14, 38)], fill=10)
-    draw.rectangle([20, 14, 28, 22], fill=2)
-    draw.text((21, 15), "RIP", fill=1)
-    return img
+def make_walk(frame: int) -> list[str]:
+    return WALK_TOP + WALK_LEGS[frame]
 
 
-def make_ghost(frame: int) -> Image.Image:
-    img = blank()
-    draw = ImageDraw.Draw(img)
-    y = 6 + (frame % 2)
-    draw.ellipse([14, y, 34, y + 18], fill=11)
-    draw.rectangle([14, y + 10, 34, y + 24], fill=11)
-    for x in range(14, 35, 4):
-        draw.ellipse([x, y + 20, x + 3, y + 26], fill=11)
-    draw.ellipse([20, y + 8, 22, y + 10], fill=1)
-    draw.ellipse([26, y + 8, 28, y + 10], fill=1)
-    return img
+def make_sit(frame: int) -> list[str]:
+    rows = list(SIT)
+    if frame == 1:
+        rows[5] = rows[5].replace("ee", "oo")  # blink
+    return rows
 
 
-def make_butterfly(frame: int) -> Image.Image:
-    img = Image.new("RGBA", (12, 10), PALETTE[0])
-    draw = ImageDraw.Draw(img)
-    wing = 13 if frame % 2 == 0 else 3
-    draw.ellipse([0, 1, 5, 8], fill=wing)
-    draw.ellipse([7, 1, 12, 8], fill=wing)
-    draw.rectangle([5, 4, 7, 9], fill=1)
-    return img
+def make_distressed(frame: int) -> list[str]:
+    return apply_cells(DISTRESSED, DISTRESSED_SWEAT[frame], "d")
 
 
-def make_fish_skeleton() -> Image.Image:
-    img = Image.new("RGBA", (64, 16), (0, 0, 0, 255))
-    draw = ImageDraw.Draw(img)
-    draw.ellipse([4, 4, 14, 12], fill=11)
-    draw.line([(14, 8), (52, 8)], fill=11, width=2)
-    for x in range(18, 54, 6):
-        draw.line([(x, 8), (x + 2, 4)], fill=11, width=1)
-        draw.line([(x, 8), (x + 2, 12)], fill=11, width=1)
-    draw.polygon([(54, 8), (62, 4), (62, 12)], fill=11)
-    return img
+def make_sleep(frame: int) -> list[str]:
+    if frame == 0:
+        return list(SLEEP)
+    return apply_cells(SLEEP, SLEEP_Z_FRAME1)
 
 
-def make_fish_meat() -> Image.Image:
-    img = Image.new("RGBA", (64, 16), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    draw.ellipse([4, 4, 14, 12], fill=12)
-    draw.rectangle([10, 5, 60, 11], fill=3)
-    draw.polygon([(58, 8), (63, 5), (63, 11)], fill=3)
-    return img
+def make_charging(frame: int) -> list[str]:
+    head = list(CHARGE_HEAD)
+    pad = 0 if frame == 0 else 1
+    rows = [""] * pad + head
+    # Box overlaps the bottom of the head so the cat sits inside it.
+    box_top = len(rows) - 1
+    grid = [list(r.ljust(GRID_W, ".")) for r in rows[:box_top]]
+    for box_row in CHARGE_BOX:
+        grid.append(list(box_row.ljust(GRID_W, ".")))
+    return ["".join(r).rstrip(".") for r in grid]
 
 
 def resource_name(filename: str) -> str:
-    stem = Path(filename).stem.upper()
-    return f"IMAGE_{stem}"
+    return f"IMAGE_{Path(filename).stem.upper()}"
+
+
+def make_fish(meat: bool) -> Image.Image:
+    w, h = 32, 8
+    img = Image.new("P", (w * 2, h * 2), 0)
+    palette_bytes = []
+    for color in PALETTE:
+        palette_bytes.extend(color[:3])
+    palette_bytes.extend([0] * (768 - len(palette_bytes)))
+    img.putpalette(palette_bytes)
+
+    if meat:
+        rows = [
+            "........................",
+            "....ooooooooooooooo.....",
+            "..ooBBBBBBBBBBBBBBBoo.o.",
+            ".oBBeBBBBBBBBBBBBBBBooo.",
+            ".oBBBBBBBBBBBBBBBBBBooo.",
+            "..ooBBBBBBBBBBBBBBBoo.o.",
+            "....ooooooooooooooo.....",
+            "........................",
+        ]
+        cm = {".": 0, "o": 1, "B": 3, "e": 1}
+    else:
+        rows = [
+            "........................",
+            "....G..................." ,
+            "..GGGGG.G.G.G.G.G.G..G..",
+            ".G..GGGGGGGGGGGGGGGGGG..",
+            "..GGGGG.G.G.G.G.G.G..G..",
+            "....G...................",
+            "........................",
+            "........................",
+        ]
+        cm = {".": 0, "G": 9}
+    rows = [r.ljust(w, ".")[:w] for r in rows]
+    px = img.load()
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            idx = cm[ch]
+            if idx == 0:
+                continue
+            for dy in range(2):
+                for dx in range(2):
+                    px[x * 2 + dx, y * 2 + dy] = idx
+    return img
+
+
+def make_preview(images: dict[str, Image.Image]) -> None:
+    """Contact sheet on a checkerboard to spot transparency problems."""
+    scale = 3
+    cols = 8
+    cell = 56
+    names = sorted(images)
+    rows_n = (len(names) + cols - 1) // cols
+    sheet = Image.new("RGB", (cols * cell * scale, rows_n * cell * scale), (40, 120, 60))
+    for i, name in enumerate(names):
+        # Re-open the saved file so the tRNS chunk is honored.
+        img = Image.open(OUT_DIR / name).convert("RGBA")
+        img = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+        cx = (i % cols) * cell * scale
+        cy = (i // cols) * cell * scale
+        # Checker background per cell
+        for ty in range(0, cell * scale, 12):
+            for tx in range(0, cell * scale, 12):
+                if (tx // 12 + ty // 12) % 2 == 0:
+                    for yy in range(ty, min(ty + 12, cell * scale)):
+                        for xx in range(tx, min(tx + 12, cell * scale)):
+                            sheet.putpixel((cx + xx, cy + yy), (60, 140, 80))
+        ox = cx + (cell * scale - img.width) // 2
+        oy = cy + (cell * scale - img.height) // 2
+        sheet.paste(img, (ox, oy), img)
+    sheet.save(PREVIEW_PATH)
 
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     resources = []
+    generated: dict[str, Image.Image] = {}
 
-    for breed in BREEDS:
-        for anim, count in [
-            ("walk", 3),
-            ("idle", 2),
-            ("distressed", 2),
-            ("sleep", 2),
-            ("charging", 2),
-        ]:
-            for frame in range(count):
-                filename = f"cat_{breed}_{anim}_{frame}.png"
-                path = OUT_DIR / filename
-                img = make_cat_frame(breed, anim, frame)
-                save_palettized(img, path)
-                resources.append(
-                    {
-                        "type": "bitmap",
-                        "name": resource_name(filename),
-                        "file": f"images/{filename}",
-                    }
-                )
-
-    shared = {
-        "tombstone.png": make_tombstone,
-        "ghost_0.png": lambda: make_ghost(0),
-        "ghost_1.png": lambda: make_ghost(1),
-        "butterfly_0.png": lambda: make_butterfly(0),
-        "butterfly_1.png": lambda: make_butterfly(1),
-        "fish_skeleton.png": make_fish_skeleton,
-        "fish_meat.png": make_fish_meat,
+    cat_anims = {
+        "walk": (3, make_walk),
+        "idle": (2, make_sit),
+        "distressed": (2, make_distressed),
+        "sleep": (2, make_sleep),
+        "charging": (2, make_charging),
     }
 
-    for filename, factory in shared.items():
-        path = OUT_DIR / filename
-        save_palettized(factory(), path)
-        resources.append(
-            {
-                "type": "bitmap",
-                "name": resource_name(filename),
-                "file": f"images/{filename}",
-            }
-        )
+    for breed in BREEDS:
+        cm = charmap_for(breed)
+        for anim, (count, factory) in cat_anims.items():
+            for frame in range(count):
+                filename = f"cat_{breed}_{anim}_{frame}.png"
+                img = render(factory(frame), cm, GRID_W)
+                save_png(img, OUT_DIR / filename)
+                generated[filename] = img
+                resources.append({
+                    "type": "bitmap",
+                    "name": resource_name(filename),
+                    "file": f"images/{filename}",
+                })
+
+    shared_cm = charmap_for(None)
+    shared: dict[str, Image.Image] = {
+        "tombstone.png": render(TOMBSTONE, shared_cm, GRID_W),
+        "ghost_0.png": render(GHOST[0], {**shared_cm, "o": 9}, GHOST_W),
+        "ghost_1.png": render(GHOST[1], {**shared_cm, "o": 9}, GHOST_W),
+        "butterfly_0.png": render(BUTTERFLY[0], shared_cm, BUTTERFLY_W),
+        "butterfly_1.png": render(BUTTERFLY[1], shared_cm, BUTTERFLY_W),
+        "fish_skeleton.png": make_fish(meat=False),
+        "fish_meat.png": make_fish(meat=True),
+    }
+
+    for filename, img in shared.items():
+        save_png(img, OUT_DIR / filename)
+        generated[filename] = img
+        resources.append({
+            "type": "bitmap",
+            "name": resource_name(filename),
+            "file": f"images/{filename}",
+        })
 
     manifest_path = ROOT / "tools" / "generated_resources.json"
-    manifest_path.write_text(json.dumps(resources, indent=2))
+    manifest_path.write_text(json.dumps(resources, indent=2) + "\n")
+    make_preview(generated)
     print(f"Generated {len(resources)} sprites in {OUT_DIR}")
+    print(f"Preview sheet: {PREVIEW_PATH}")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 static GameSettings s_settings;
 static GameState s_state;
 static int s_current_day = -1;
+static int32_t s_last_persisted_steps = -1;
 
 #ifdef STEP_OR_DED_DEBUG
 static bool s_debug_force_state = false;
@@ -118,20 +119,32 @@ SkyPhase game_get_sky_phase(int hour) {
   return SKY_NIGHT;
 }
 
+// Evaluates the previous day's goal exactly once per day boundary.
+// Safe to call repeatedly; guarded by the persisted last-evaluated day.
 void game_on_day_change(void) {
-  int32_t goal = game_get_step_goal();
-  int last_steps = persist_exists(PERSIST_KEY_LAST_DAY_STEPS)
-      ? persist_read_int(PERSIST_KEY_LAST_DAY_STEPS) : 0;
+  int today = game_get_day_number();
+  int last_eval = persist_exists(PERSIST_KEY_LAST_EVAL_DAY)
+      ? persist_read_int(PERSIST_KEY_LAST_EVAL_DAY) : -1;
 
-  if (prv_goal_failed(last_steps, goal)) {
-    s_state.is_dead = true;
-    persist_write_bool(PERSIST_KEY_IS_DEAD, true);
-  } else if (!s_state.is_dead) {
-    persist_write_bool(PERSIST_KEY_IS_DEAD, false);
+  s_current_day = today;
+  if (last_eval == today) {
+    return;
   }
 
-  persist_write_int(PERSIST_KEY_LAST_EVAL_DAY, s_current_day);
+  // Only judge the cat if there was a tracked previous day (not first run).
+  if (last_eval >= 0) {
+    int32_t goal = game_get_step_goal();
+    int32_t last_steps = persist_exists(PERSIST_KEY_LAST_DAY_STEPS)
+        ? persist_read_int(PERSIST_KEY_LAST_DAY_STEPS) : 0;
+    if (prv_goal_failed(last_steps, goal)) {
+      s_state.is_dead = true;
+      persist_write_bool(PERSIST_KEY_IS_DEAD, true);
+    }
+  }
+
+  persist_write_int(PERSIST_KEY_LAST_EVAL_DAY, today);
   persist_write_int(PERSIST_KEY_LAST_DAY_STEPS, 0);
+  s_last_persisted_steps = 0;
   s_state.resurrection_progress = 0;
 }
 
@@ -177,17 +190,8 @@ void game_update(void) {
   struct tm *tm_info = localtime(&now);
   int day = game_get_day_number();
 
-  if (s_current_day < 0) {
-    s_current_day = day;
-    if (persist_exists(PERSIST_KEY_LAST_EVAL_DAY)) {
-      int last_eval = persist_read_int(PERSIST_KEY_LAST_EVAL_DAY);
-      if (last_eval != day) {
-        game_on_day_change();
-      }
-    }
-  } else if (day != s_current_day) {
+  if (day != s_current_day) {
     game_on_day_change();
-    s_current_day = day;
   }
 
 #ifdef STEP_OR_DED_DEBUG
@@ -200,7 +204,11 @@ void game_update(void) {
   s_state.steps = (int32_t)health_service_sum_today(HealthMetricStepCount);
 #endif
 
-  persist_write_int(PERSIST_KEY_LAST_DAY_STEPS, s_state.steps);
+  // Throttle flash writes: only persist when the value actually changed.
+  if (s_state.steps != s_last_persisted_steps) {
+    persist_write_int(PERSIST_KEY_LAST_DAY_STEPS, s_state.steps);
+    s_last_persisted_steps = s_state.steps;
+  }
 
   s_state.step_goal = game_get_step_goal();
   s_state.sky_phase = game_get_sky_phase(tm_info->tm_hour);
@@ -239,7 +247,9 @@ void game_init(void) {
   memset(&s_state, 0, sizeof(s_state));
   s_state.is_dead = persist_exists(PERSIST_KEY_IS_DEAD) && persist_read_bool(PERSIST_KEY_IS_DEAD);
   s_state.resurrection_goal = RESURRECTION_STEPS;
-  s_current_day = game_get_day_number();
+  // Leave s_current_day at -1 so the first game_update() evaluates any
+  // missed midnight rollover (e.g. watchface was not running at midnight).
+  s_current_day = -1;
   game_update();
 }
 
