@@ -40,8 +40,8 @@ PALETTE: list[tuple[int, int, int, int]] = [
 # Shared characters available in every template.
 BASE_CHARS = {
     ".": 0,
-    "k": 1,   # black
-    "W": 2,   # white
+    "k": 1,   # black (tombstone text, whiskers)
+    "W": 2,   # white (eye shine)
     "z": 2,   # Zzz text
     "x": 6,   # cardboard
     "y": 4,   # cardboard shading
@@ -52,6 +52,10 @@ BASE_CHARS = {
     "r": 10,  # red
     "f": 13,  # butterfly wing
     "u": 12,  # butterfly wing alt
+    "i": 2,   # eye shine (alias)
+    "c": 11,  # blush cheek
+    "m": 11,  # omega mouth
+    "v": 1,   # whisker
 }
 
 # Per-breed characters: o outline, B body, b belly/chest, s stripe,
@@ -69,23 +73,26 @@ GRID_W = 24
 # Cat templates (24 wide). Cat faces right. Bottom row touches the ground.
 # ---------------------------------------------------------------------------
 
-# Standing body shared by walk/distressed poses (rows 0-15 of a 20-row grid).
+# Cute cat templates (24 wide). Cat faces right. Bottom row touches the ground.
+# Chars: i=eye shine, c=blush, m=omega mouth, v=whisker, T=curled tail.
+
 WALK_TOP = [
-    "..........oo....oo",
-    ".........oAAo..oAAo",
+    "...........oo...oo",
+    "..........oAAo.oAAo",
     ".........oABBooBBAo",
     "........oBBBBBBBBBBo",
-    "........oBBBBBBBBBBo",
-    ".oo.....oBBeeBBeeBBo",
-    "oTTo....oBBBBnnBBBBo",
-    "oTo.ooooooBBBBBBBBo",
-    ".oTBBBBBBBBBBBBBBBBo",
-    "..oBBsBBsBBsBBsBBBBo",
-    "..oBBsBBsBBsBBsBBBBo",
+    ".......oBBBBBBBBBBBBo",
+    "......oBBeeiBBeeiBBo",
+    ".....oBBccBBnnBBccBBo",
+    ".....oBBBBBBmmBBBBBo",
+    "....oBBBBBBBBBBBBBBo",
+    "....oBBBBBBBBBBBBBBo",
+    "...oBBsBBsBBsBBsBBBBo",
     "..oBBBBBBBBBBBBBBBBo",
     "..oBBBBBBBBBBBBBBBBo",
     "...oBBBBBBBBBBBBBBo",
     "....ooBBBBBBBBBBoo",
+    "......oTTTo",
 ]
 
 WALK_LEGS = [
@@ -114,46 +121,46 @@ WALK_LEGS = [
 
 # Sitting cat (idle). Frame 1 blinks.
 SIT = [
-    "..........oo....oo",
-    ".........oAAo..oAAo",
+    "...........oo...oo",
+    "..........oAAo.oAAo",
     ".........oABBooBBAo",
     "........oBBBBBBBBBBo",
-    "........oBBBBBBBBBBo",
-    "........oBBeeBBeeBBo",
-    "........oBBBBnnBBBBo",
-    ".........oBBBBBBBBo",
-    "........oBBBBBBBBBBo",
-    ".......oBBBBBbbBBBBo",
-    ".......oBBBBbbbbBBBo",
-    "......oBBsBBbbbbBBBo",
-    "......oBBsBBbbbbBBBo",
-    ".....oBBBsBBbbbbBBBo",
-    ".....oBBBBBBbbbbBBBo",
+    ".......oBBBBBBBBBBBBo",
+    "......oBBeeiBBeeiBBo",
+    ".....oBBccBBnnBBccBBo",
+    ".....oBBBBBBmmBBBBBo",
     "....oBBBBBBBBBBBBBBo",
     "....oBBBBBBBBBBBBBBo",
-    "....oBBBBBoBBBBoBBBo",
-    ".oooBBBBBBoBppoBppBo",
-    "oTTTooooooooooooooo",
+    "...oBBBBBbbBBBBBBBBo",
+    "..oBBBBbbbbBBBBBBBBo",
+    "..oBBsBBbbbbBBBBBBBo",
+    ".oBBBBBBbbbbBBBBBBBBo",
+    ".oBBBBBBBBBBBBBBBBBBo",
+    ".oBBBBBoBBBBoBBBBBBo",
+    ".oBBBBBoBppoBppBBBBo",
+    "..oBBBBBBBBBBBBBBBBo",
+    "...oBBBBBBBBBBBBBBo",
+    "....oTTToooooooooo",
 ]
 
-# Distressed: standing, ears flat, sad eyes, frown, drooping tail.
+# Distressed: flat ears, sad eyes, frown, drooping tail.
 DISTRESSED = [
     "",
-    "",
     "........oo......oo",
-    ".......oAAooooooAAo",
-    ".......oBBBBBBBBBBo",
-    ".......oBeeBBBBeeBo",
-    ".......oBBBBnnBBBBo",
-    ".......oBBBooooBBBo",
-    "........oBBBBBBBBo",
-    ".......ooBBBBBBBBoo",
-    "......oBBsBBsBBsBBBo",
-    ".oo...oBBBBBBBBBBBBo",
-    ".oTo..oBsBBsBBsBBBBo",
-    "..oTo.oBBBBBBBBBBBo",
-    "..oToBBBBBBBBBBBBBo",
-    "...oBBBBBBBBBBBBBo",
+    ".......oAAoooooAAo",
+    "......oBBBBBBBBBBBBo",
+    ".....oBBeeiBBeeiBBo",
+    ".....oBBccBBnnBBccBBo",
+    ".....oBBBBBBmmBBBBBo",
+    "......oBBBBooooBBBBo",
+    "......oBBBBBBBBBBBBo",
+    ".....oBBsBBsBBsBBBBBo",
+    "....oBBBBBBBBBBBBBBBo",
+    "...oBBBBBBBBBBBBBBBBo",
+    "..oBBBBBBBBBBBBBBBBBo",
+    ".oBBBBBBBBBBBBBBBBBBo",
+    "..oBBBBBBBBBBBBBBBBo",
+    "...oBBBBBBBBBBBBBBo",
     "....ooBBBBBBBBBBoo",
     ".....oBBo....oBBo",
     ".....oBBo....oBBo",
@@ -195,15 +202,17 @@ SLEEP_Z_FRAME1 = {
     (19, 4): "z",
 }
 
-# Charging: cat head peeking out of a cardboard box. Frame 1 sinks 1 row.
+# Charging: cute head peeking out of a cardboard box. Frame 1 sinks 1 row.
 CHARGE_HEAD = [
-    "..........oo....oo",
-    ".........oAAo..oAAo",
+    "...........oo...oo",
+    "..........oAAo.oAAo",
     ".........oABBooBBAo",
     "........oBBBBBBBBBBo",
-    "........oBooBBBBooBo",
-    "........oBBBBnnBBBBo",
-    ".........oBBBBBBBBo",
+    ".......oBBBBBBBBBBBBo",
+    "......oBBeeiBBeeiBBo",
+    ".....oBBccBBnnBBccBBo",
+    ".....oBBBBBBmmBBBBBo",
+    "....oBBBBBBBBBBBBBBo",
 ]
 
 CHARGE_BOX = [
@@ -370,7 +379,7 @@ def make_walk(frame: int) -> list[str]:
 def make_sit(frame: int) -> list[str]:
     rows = list(SIT)
     if frame == 1:
-        rows[5] = rows[5].replace("ee", "oo")  # blink
+        rows[5] = rows[5].replace("eei", "bbb").replace("ee", "bb")  # blink
     return rows
 
 
@@ -397,12 +406,15 @@ def make_charging(frame: int) -> list[str]:
 
 
 def resource_name(filename: str) -> str:
-    return f"IMAGE_{Path(filename).stem.upper()}"
+    stem = Path(filename).stem
+    if "~" in stem:
+        stem = stem.split("~")[0]
+    return f"IMAGE_{stem.upper()}"
 
 
-def make_fish(meat: bool) -> Image.Image:
+def make_fish(meat: bool, scale: int = 2) -> Image.Image:
     w, h = 32, 8
-    img = Image.new("P", (w * 2, h * 2), 0)
+    img = Image.new("P", (w * scale, h * scale), 0)
     palette_bytes = []
     for color in PALETTE:
         palette_bytes.extend(color[:3])
@@ -440,10 +452,27 @@ def make_fish(meat: bool) -> Image.Image:
             idx = cm[ch]
             if idx == 0:
                 continue
-            for dy in range(2):
-                for dx in range(2):
-                    px[x * 2 + dx, y * 2 + dy] = idx
+            for dy in range(scale):
+                for dx in range(scale):
+                    px[x * scale + dx, y * scale + dy] = idx
     return img
+
+
+def save_sprite(img: Image.Image, base_filename: str, scale: int,
+                resources: list, generated: dict[str, Image.Image]) -> None:
+    """Save a sprite at the given scale; emit ~emery tagged copy for 3x."""
+    if scale == 2:
+        save_png(img, OUT_DIR / base_filename)
+        generated[base_filename] = img
+        resources.append({
+            "type": "bitmap",
+            "name": resource_name(base_filename),
+            "file": f"images/{base_filename}",
+        })
+    elif scale == 3:
+        stem = Path(base_filename).stem
+        emery_filename = f"{stem}~emery.png"
+        save_png(img, OUT_DIR / emery_filename)
 
 
 def make_preview(images: dict[str, Image.Image]) -> None:
@@ -486,44 +515,33 @@ def main() -> None:
         "charging": (2, make_charging),
     }
 
-    for breed in BREEDS:
-        cm = charmap_for(breed)
-        for anim, (count, factory) in cat_anims.items():
-            for frame in range(count):
-                filename = f"cat_{breed}_{anim}_{frame}.png"
-                img = render(factory(frame), cm, GRID_W)
-                save_png(img, OUT_DIR / filename)
-                generated[filename] = img
-                resources.append({
-                    "type": "bitmap",
-                    "name": resource_name(filename),
-                    "file": f"images/{filename}",
-                })
+    for scale in (2, 3):
+        for breed in BREEDS:
+            cm = charmap_for(breed)
+            for anim, (count, factory) in cat_anims.items():
+                for frame in range(count):
+                    filename = f"cat_{breed}_{anim}_{frame}.png"
+                    img = render(factory(frame), cm, GRID_W, scale=scale)
+                    save_sprite(img, filename, scale, resources, generated)
 
-    shared_cm = charmap_for(None)
-    shared: dict[str, Image.Image] = {
-        "tombstone.png": render(TOMBSTONE, shared_cm, GRID_W),
-        "ghost_0.png": render(GHOST[0], {**shared_cm, "o": 9}, GHOST_W),
-        "ghost_1.png": render(GHOST[1], {**shared_cm, "o": 9}, GHOST_W),
-        "butterfly_0.png": render(BUTTERFLY[0], shared_cm, BUTTERFLY_W),
-        "butterfly_1.png": render(BUTTERFLY[1], shared_cm, BUTTERFLY_W),
-        "fish_skeleton.png": make_fish(meat=False),
-        "fish_meat.png": make_fish(meat=True),
-    }
+        shared_cm = charmap_for(None)
+        shared: dict[str, Image.Image] = {
+            "tombstone.png": render(TOMBSTONE, shared_cm, GRID_W, scale=scale),
+            "ghost_0.png": render(GHOST[0], {**shared_cm, "o": 9}, GHOST_W, scale=scale),
+            "ghost_1.png": render(GHOST[1], {**shared_cm, "o": 9}, GHOST_W, scale=scale),
+            "butterfly_0.png": render(BUTTERFLY[0], shared_cm, BUTTERFLY_W, scale=scale),
+            "butterfly_1.png": render(BUTTERFLY[1], shared_cm, BUTTERFLY_W, scale=scale),
+            "fish_skeleton.png": make_fish(meat=False, scale=scale),
+            "fish_meat.png": make_fish(meat=True, scale=scale),
+        }
 
-    for filename, img in shared.items():
-        save_png(img, OUT_DIR / filename)
-        generated[filename] = img
-        resources.append({
-            "type": "bitmap",
-            "name": resource_name(filename),
-            "file": f"images/{filename}",
-        })
+        for filename, img in shared.items():
+            save_sprite(img, filename, scale, resources, generated)
 
     manifest_path = ROOT / "tools" / "generated_resources.json"
     manifest_path.write_text(json.dumps(resources, indent=2) + "\n")
     make_preview(generated)
-    print(f"Generated {len(resources)} sprites in {OUT_DIR}")
+    print(f"Generated {len(resources)} resource entries in {OUT_DIR}")
     print(f"Preview sheet: {PREVIEW_PATH}")
 
 

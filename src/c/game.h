@@ -2,13 +2,22 @@
 
 #include <pebble.h>
 
-#define SCREEN_W 144
-#define SCREEN_H 168
+#define SCREEN_W PBL_DISPLAY_WIDTH
+#define SCREEN_H PBL_DISPLAY_HEIGHT
+
+#if PBL_DISPLAY_HEIGHT >= 228
+#define HEADER_H 64
+#define HUD_H 48
+#define GROUND_STRIP_H 12
+#else
 #define HEADER_H 52
-#define STAGE_H 76
 #define HUD_H 40
+#define GROUND_STRIP_H 10
+#endif
+
+#define STAGE_H (SCREEN_H - HEADER_H - HUD_H)
 // Ground line, relative to the stage layer's coordinate space.
-#define GROUND_OFFSET (STAGE_H - 10)
+#define GROUND_OFFSET (STAGE_H - GROUND_STRIP_H)
 
 #define DEFAULT_STEP_GOAL 10000
 #define DEFAULT_ACTIVE_START 8

@@ -4,7 +4,78 @@
 
 #define ANIM_INTERVAL_MS 200
 #define ANIM_DURATION_MS 4000
+
+#if PBL_DISPLAY_HEIGHT >= 228
+#define FLICK_JUMP_HEIGHT 10
+#define FONT_TIME FONT_KEY_LECO_42_NUMBERS
+#define FONT_DATE FONT_KEY_GOTHIC_18
+#define FONT_STEPS FONT_KEY_GOTHIC_24_BOLD
+#define FONT_SPEECH FONT_KEY_GOTHIC_18
+#define TIME_LAYER_H 46
+#define TIME_LAYER_Y -2
+#define DATE_LAYER_Y 42
+#define DATE_LAYER_H 22
+#define STEPS_LAYER_X 6
+#define STEPS_LAYER_Y_OFFSET 9
+#define STEPS_LAYER_W 80
+#define STEPS_LAYER_H 30
+#define SPEECH_OFFSET_X 32
+#define SPEECH_OFFSET_Y -22
+#define SPEECH_BUBBLE_W 44
+#define SPEECH_BUBBLE_H 20
+#define SPEECH_BUBBLE_R 5
+#define SPEECH_TEXT_PAD 2
+#define BATTERY_ICON_W 12
+#define BATTERY_ICON_H 8
+#define BATTERY_TIP_W 3
+#define BATTERY_TIP_H 5
+#define BATTERY_FILL_W 6
+#define BATTERY_FILL_H 3
+#define BATTERY_OFFSET_X 8
+#define BATTERY_OFFSET_Y 3
+#define BUTTERFLY_OFFSET_X 6
+#define BUTTERFLY_OFFSET_Y 8
+#define GHOST_FLOAT_OFFSET 8
+#define GHOST_FLOAT_RANGE 3
+#define MOON_X_OFFSET 22
+#define MOON_Y 14
+#define MOON_RADIUS 6
+#else
 #define FLICK_JUMP_HEIGHT 8
+#define FONT_TIME FONT_KEY_LECO_36_BOLD_NUMBERS
+#define FONT_DATE FONT_KEY_GOTHIC_14
+#define FONT_STEPS FONT_KEY_GOTHIC_18_BOLD
+#define FONT_SPEECH FONT_KEY_GOTHIC_14
+#define TIME_LAYER_H 40
+#define TIME_LAYER_Y -2
+#define DATE_LAYER_Y 34
+#define DATE_LAYER_H 18
+#define STEPS_LAYER_X 4
+#define STEPS_LAYER_Y_OFFSET 7
+#define STEPS_LAYER_W 66
+#define STEPS_LAYER_H 24
+#define SPEECH_OFFSET_X 26
+#define SPEECH_OFFSET_Y -18
+#define SPEECH_BUBBLE_W 36
+#define SPEECH_BUBBLE_H 16
+#define SPEECH_BUBBLE_R 4
+#define SPEECH_TEXT_PAD 1
+#define BATTERY_ICON_W 10
+#define BATTERY_ICON_H 6
+#define BATTERY_TIP_W 2
+#define BATTERY_TIP_H 4
+#define BATTERY_FILL_W 5
+#define BATTERY_FILL_H 2
+#define BATTERY_OFFSET_X 6
+#define BATTERY_OFFSET_Y 2
+#define BUTTERFLY_OFFSET_X 4
+#define BUTTERFLY_OFFSET_Y 6
+#define GHOST_FLOAT_OFFSET 6
+#define GHOST_FLOAT_RANGE 2
+#define MOON_X_OFFSET 18
+#define MOON_Y 12
+#define MOON_RADIUS 5
+#endif
 
 static Window *s_window;
 static Layer *s_stage_layer;
@@ -145,7 +216,7 @@ static void prv_draw_sky(GContext *ctx, SkyPhase phase) {
       int y = 6 + (i * 9) % (bounds.size.h / 2);
       graphics_fill_circle(ctx, GPoint(x, y), 1);
     }
-    graphics_fill_circle(ctx, GPoint(bounds.size.w - 18, 12), 5);
+    graphics_fill_circle(ctx, GPoint(bounds.size.w - MOON_X_OFFSET, MOON_Y), MOON_RADIUS);
   }
 }
 
@@ -157,22 +228,22 @@ static void prv_draw_ground(GContext *ctx) {
 }
 
 static void prv_draw_speech_bubble(GContext *ctx, int cat_x, int cat_y) {
-  int bx = cat_x + 26;
-  int by = cat_y - 18;
+  int bx = cat_x + SPEECH_OFFSET_X;
+  int by = cat_y + SPEECH_OFFSET_Y;
   if (by < 2) {
     by = 2;
   }
-  if (bx + 38 > SCREEN_W) {
-    bx = SCREEN_W - 38;
+  if (bx + SPEECH_BUBBLE_W + 2 > SCREEN_W) {
+    bx = SCREEN_W - SPEECH_BUBBLE_W - 2;
   }
   graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_fill_rect(ctx, GRect(bx, by, 36, 16), 4, GCornersAll);
+  graphics_fill_rect(ctx, GRect(bx, by, SPEECH_BUBBLE_W, SPEECH_BUBBLE_H), SPEECH_BUBBLE_R, GCornersAll);
   graphics_context_set_stroke_color(ctx, GColorBlack);
-  graphics_draw_round_rect(ctx, GRect(bx, by, 36, 16), 4);
+  graphics_draw_round_rect(ctx, GRect(bx, by, SPEECH_BUBBLE_W, SPEECH_BUBBLE_H), SPEECH_BUBBLE_R);
   graphics_context_set_text_color(ctx, GColorBlack);
-  graphics_draw_text(ctx, "meow!", fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(bx + 1, by - 2, 34, 16), GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentCenter, NULL);
+  graphics_draw_text(ctx, "meow!", fonts_get_system_font(FONT_SPEECH),
+                     GRect(bx + SPEECH_TEXT_PAD, by - 2, SPEECH_BUBBLE_W - SPEECH_TEXT_PAD * 2, SPEECH_BUBBLE_H),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 }
 
 static void prv_draw_battery_icon(GContext *ctx, int x, int y, bool flash_on) {
@@ -180,10 +251,10 @@ static void prv_draw_battery_icon(GContext *ctx, int x, int y, bool flash_on) {
     return;
   }
   graphics_context_set_fill_color(ctx, GColorRed);
-  graphics_fill_rect(ctx, GRect(x, y, 10, 6), 2, GCornersAll);
-  graphics_fill_rect(ctx, GRect(x + 10, y + 1, 2, 4), 1, GCornersAll);
+  graphics_fill_rect(ctx, GRect(x, y, BATTERY_ICON_W, BATTERY_ICON_H), 2, GCornersAll);
+  graphics_fill_rect(ctx, GRect(x + BATTERY_ICON_W, y + 1, BATTERY_TIP_W, BATTERY_TIP_H), 1, GCornersAll);
   graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_fill_rect(ctx, GRect(x + 2, y + 2, 5, 2), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(x + 2, y + 2, BATTERY_FILL_W, BATTERY_FILL_H), 0, GCornerNone);
 }
 
 static void prv_stage_update_proc(Layer *layer, GContext *ctx) {
@@ -203,8 +274,8 @@ static void prv_stage_update_proc(Layer *layer, GContext *ctx) {
 
   if (state->pet_state == PET_STATE_ENERGETIC && s_butterfly_bitmap) {
     GSize bf = gbitmap_get_bounds(s_butterfly_bitmap).size;
-    int bx = cat_x + cat_size.w + 4 + (s_anim_frame % 3) * 2;
-    int by = cat_y - 6 + (s_anim_frame % 2) * 3;
+    int bx = cat_x + cat_size.w + BUTTERFLY_OFFSET_X + (s_anim_frame % 3) * 2;
+    int by = cat_y - BUTTERFLY_OFFSET_Y + (s_anim_frame % 2) * 3;
     if (bx + bf.w > SCREEN_W) {
       bx = SCREEN_W - bf.w;
     }
@@ -217,7 +288,7 @@ static void prv_stage_update_proc(Layer *layer, GContext *ctx) {
 
   if (state->pet_state == PET_STATE_DEAD && s_ghost_bitmap) {
     GSize gs = gbitmap_get_bounds(s_ghost_bitmap).size;
-    int ghost_y = cat_y - gs.h + 6 + ((s_ghost_frame % 2) ? -2 : 2);
+    int ghost_y = cat_y - gs.h + GHOST_FLOAT_OFFSET + ((s_ghost_frame % 2) ? -GHOST_FLOAT_RANGE : GHOST_FLOAT_RANGE);
     if (ghost_y < 0) {
       ghost_y = 0;
     }
@@ -230,7 +301,7 @@ static void prv_stage_update_proc(Layer *layer, GContext *ctx) {
   }
 
   if (state->pet_state == PET_STATE_LOW_BATTERY) {
-    prv_draw_battery_icon(ctx, cat_x + cat_size.w - 6, cat_y - 2, s_battery_flash);
+    prv_draw_battery_icon(ctx, cat_x + cat_size.w - BATTERY_OFFSET_X, cat_y - BATTERY_OFFSET_Y, s_battery_flash);
   }
 }
 
@@ -361,16 +432,15 @@ static void prv_inbox_dropped(AppMessageResult reason, void *context) {
 static void prv_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
 
-  // LECO 36 needs ~40px of layer height; -2 offset trims internal padding.
-  s_time_layer = text_layer_create(GRect(0, -2, SCREEN_W, 40));
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_LECO_36_BOLD_NUMBERS));
+  s_time_layer = text_layer_create(GRect(0, TIME_LAYER_Y, SCREEN_W, TIME_LAYER_H));
+  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_TIME));
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
   text_layer_set_background_color(s_time_layer, GColorClear);
   text_layer_set_text_color(s_time_layer, GColorWhite);
   layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
 
-  s_date_layer = text_layer_create(GRect(0, 34, SCREEN_W, 18));
-  text_layer_set_font(s_date_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  s_date_layer = text_layer_create(GRect(0, DATE_LAYER_Y, SCREEN_W, DATE_LAYER_H));
+  text_layer_set_font(s_date_layer, fonts_get_system_font(FONT_DATE));
   text_layer_set_text_alignment(s_date_layer, GTextAlignmentCenter);
   text_layer_set_background_color(s_date_layer, GColorClear);
   text_layer_set_text_color(s_date_layer, GColorWhite);
@@ -384,8 +454,9 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_hud_layer, prv_hud_update_proc);
   layer_add_child(window_layer, s_hud_layer);
 
-  s_steps_layer = text_layer_create(GRect(4, HEADER_H + STAGE_H + 7, 66, 24));
-  text_layer_set_font(s_steps_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  s_steps_layer = text_layer_create(GRect(STEPS_LAYER_X, HEADER_H + STAGE_H + STEPS_LAYER_Y_OFFSET,
+                                         STEPS_LAYER_W, STEPS_LAYER_H));
+  text_layer_set_font(s_steps_layer, fonts_get_system_font(FONT_STEPS));
   text_layer_set_background_color(s_steps_layer, GColorClear);
   text_layer_set_text_color(s_steps_layer, GColorWhite);
   layer_add_child(window_layer, text_layer_get_layer(s_steps_layer));
