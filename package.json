@@ -1,0 +1,294 @@
+{
+  "name": "step-or-ded",
+  "author": "Mohammed Nadeem",
+  "version": "1.0.0",
+  "keywords": [
+    "pebble-app"
+  ],
+  "private": true,
+  "dependencies": {
+    "@rebble/clay": "^1.0.10"
+  },
+  "pebble": {
+    "displayName": "Step or Ded",
+    "uuid": "acefdd38-0137-4750-85db-a0b672510667",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "basalt"
+    ],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "StepGoal",
+      "CatBreed",
+      "Difficulty",
+      "ActiveStart",
+      "ActiveEnd"
+    ],
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_WALK_0",
+          "file": "images/cat_orange_walk_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_WALK_1",
+          "file": "images/cat_orange_walk_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_WALK_2",
+          "file": "images/cat_orange_walk_2.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_IDLE_0",
+          "file": "images/cat_orange_idle_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_IDLE_1",
+          "file": "images/cat_orange_idle_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_DISTRESSED_0",
+          "file": "images/cat_orange_distressed_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_DISTRESSED_1",
+          "file": "images/cat_orange_distressed_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_SLEEP_0",
+          "file": "images/cat_orange_sleep_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_SLEEP_1",
+          "file": "images/cat_orange_sleep_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_CHARGING_0",
+          "file": "images/cat_orange_charging_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_CHARGING_1",
+          "file": "images/cat_orange_charging_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_WALK_0",
+          "file": "images/cat_tuxedo_walk_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_WALK_1",
+          "file": "images/cat_tuxedo_walk_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_WALK_2",
+          "file": "images/cat_tuxedo_walk_2.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_IDLE_0",
+          "file": "images/cat_tuxedo_idle_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_IDLE_1",
+          "file": "images/cat_tuxedo_idle_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_DISTRESSED_0",
+          "file": "images/cat_tuxedo_distressed_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_DISTRESSED_1",
+          "file": "images/cat_tuxedo_distressed_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_SLEEP_0",
+          "file": "images/cat_tuxedo_sleep_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_SLEEP_1",
+          "file": "images/cat_tuxedo_sleep_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_CHARGING_0",
+          "file": "images/cat_tuxedo_charging_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_CHARGING_1",
+          "file": "images/cat_tuxedo_charging_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_WALK_0",
+          "file": "images/cat_siamese_walk_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_WALK_1",
+          "file": "images/cat_siamese_walk_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_WALK_2",
+          "file": "images/cat_siamese_walk_2.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_IDLE_0",
+          "file": "images/cat_siamese_idle_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_IDLE_1",
+          "file": "images/cat_siamese_idle_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_DISTRESSED_0",
+          "file": "images/cat_siamese_distressed_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_DISTRESSED_1",
+          "file": "images/cat_siamese_distressed_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_SLEEP_0",
+          "file": "images/cat_siamese_sleep_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_SLEEP_1",
+          "file": "images/cat_siamese_sleep_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_CHARGING_0",
+          "file": "images/cat_siamese_charging_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_CHARGING_1",
+          "file": "images/cat_siamese_charging_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_WALK_0",
+          "file": "images/cat_void_walk_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_WALK_1",
+          "file": "images/cat_void_walk_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_WALK_2",
+          "file": "images/cat_void_walk_2.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_IDLE_0",
+          "file": "images/cat_void_idle_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_IDLE_1",
+          "file": "images/cat_void_idle_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_DISTRESSED_0",
+          "file": "images/cat_void_distressed_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_DISTRESSED_1",
+          "file": "images/cat_void_distressed_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_SLEEP_0",
+          "file": "images/cat_void_sleep_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_SLEEP_1",
+          "file": "images/cat_void_sleep_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_CHARGING_0",
+          "file": "images/cat_void_charging_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_CHARGING_1",
+          "file": "images/cat_void_charging_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_TOMBSTONE",
+          "file": "images/tombstone.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_GHOST_0",
+          "file": "images/ghost_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_GHOST_1",
+          "file": "images/ghost_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_BUTTERFLY_0",
+          "file": "images/butterfly_0.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_BUTTERFLY_1",
+          "file": "images/butterfly_1.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_FISH_SKELETON",
+          "file": "images/fish_skeleton.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_FISH_MEAT",
+          "file": "images/fish_meat.png"
+        }
+      ]
+    },
+    "capabilities": [
+      "configurable",
+      "health"
+    ]
+  }
+}
