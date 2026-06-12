@@ -10,8 +10,10 @@
 #define HUD_H 48
 #define GROUND_STRIP_H 12
 #else
-#define HEADER_H 52
-#define HUD_H 40
+// On round displays the HUD stacks steps above the fish bar, so it needs
+// extra height to stay inside the circle.
+#define HEADER_H PBL_IF_ROUND_ELSE(60, 52)
+#define HUD_H PBL_IF_ROUND_ELSE(54, 40)
 #define GROUND_STRIP_H 10
 #endif
 

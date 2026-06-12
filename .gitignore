@@ -4,3 +4,5 @@ node_modules/
 *.pbw
 .lock-waf_*
 tools/preview.png
+tools/preview_*.png
+tools/screenshot_*.png

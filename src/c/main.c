@@ -48,8 +48,9 @@
 #define FONT_STEPS FONT_KEY_GOTHIC_18_BOLD
 #define FONT_SPEECH FONT_KEY_GOTHIC_14
 #define TIME_LAYER_H 40
-#define TIME_LAYER_Y -2
-#define DATE_LAYER_Y 34
+// Round displays push the clock down so digits clear the circle's top edge.
+#define TIME_LAYER_Y PBL_IF_ROUND_ELSE(6, -2)
+#define DATE_LAYER_Y PBL_IF_ROUND_ELSE(42, 34)
 #define DATE_LAYER_H 18
 #define STEPS_LAYER_X 4
 #define STEPS_LAYER_Y_OFFSET 7
@@ -292,7 +293,8 @@ static void prv_flick_jump_cb(void *data) {
 }
 
 static void prv_draw_ground(GContext *ctx) {
-  graphics_context_set_stroke_color(ctx, GColorDarkGray);
+  // DarkGray maps to black on 1-bit displays, vanishing into the background.
+  graphics_context_set_stroke_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorWhite));
   graphics_draw_line(ctx, GPoint(0, GROUND_OFFSET), GPoint(SCREEN_W, GROUND_OFFSET));
 }
 
@@ -319,10 +321,10 @@ static void prv_draw_battery_icon(GContext *ctx, int x, int y, bool flash_on) {
   if (!flash_on) {
     return;
   }
-  graphics_context_set_fill_color(ctx, GColorRed);
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorRed, GColorWhite));
   graphics_fill_rect(ctx, GRect(x, y, BATTERY_ICON_W, BATTERY_ICON_H), 2, GCornersAll);
   graphics_fill_rect(ctx, GRect(x + BATTERY_ICON_W, y + 1, BATTERY_TIP_W, BATTERY_TIP_H), 1, GCornersAll);
-  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorWhite, GColorBlack));
   graphics_fill_rect(ctx, GRect(x + 2, y + 2, BATTERY_FILL_W, BATTERY_FILL_H), 0, GCornerNone);
 }
 
@@ -413,8 +415,9 @@ static void prv_hud_update_proc(Layer *layer, GContext *ctx) {
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
 
   GSize bar = s_fish_skeleton ? gbitmap_get_bounds(s_fish_skeleton).size : GSize(64, 16);
-  int bar_x = bounds.size.w - bar.w - 6;
-  int bar_y = (bounds.size.h - bar.h) / 2;
+  // Round: steps text sits in the top half of the HUD, fish bar centered below.
+  int bar_x = PBL_IF_ROUND_ELSE((bounds.size.w - bar.w) / 2, bounds.size.w - bar.w - 6);
+  int bar_y = PBL_IF_ROUND_ELSE(28, (bounds.size.h - bar.h) / 2);
   int fill_w = (int)(bar.w * state->progress);
   if (fill_w < 0) {
     fill_w = 0;
@@ -557,8 +560,13 @@ static void prv_window_load(Window *window) {
   layer_set_update_proc(s_hud_layer, prv_hud_update_proc);
   layer_add_child(window_layer, s_hud_layer);
 
+#if defined(PBL_ROUND)
+  s_steps_layer = text_layer_create(GRect(0, HEADER_H + STAGE_H, SCREEN_W, STEPS_LAYER_H));
+  text_layer_set_text_alignment(s_steps_layer, GTextAlignmentCenter);
+#else
   s_steps_layer = text_layer_create(GRect(STEPS_LAYER_X, HEADER_H + STAGE_H + STEPS_LAYER_Y_OFFSET,
                                          STEPS_LAYER_W, STEPS_LAYER_H));
+#endif
   text_layer_set_font(s_steps_layer, fonts_get_system_font(FONT_STEPS));
   text_layer_set_background_color(s_steps_layer, GColorClear);
   text_layer_set_text_color(s_steps_layer, GColorWhite);

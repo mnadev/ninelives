@@ -1,7 +1,7 @@
 {
   "name": "ninelives",
   "author": "Mohammed Nadeem",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "keywords": [
     "pebble-app"
   ],
@@ -16,7 +16,10 @@
     "enableMultiJS": true,
     "targetPlatforms": [
       "basalt",
-      "emery"
+      "chalk",
+      "diorite",
+      "emery",
+      "flint"
     ],
     "watchapp": {
       "watchface": true

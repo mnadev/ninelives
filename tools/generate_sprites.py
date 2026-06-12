@@ -67,52 +67,76 @@ BREEDS = {
     "void": {"o": 9, "B": 1, "b": 1, "s": 1, "A": 9, "T": 1, "e": 13, "n": 9, "p": 1},
 }
 
+# 1-bit variants for B&W platforms (diorite/flint). Only black (1), white (2)
+# and transparent (0) are used. The watch background is black, so light-bodied
+# breeds keep black outlines (silhouette reads as white), while dark-bodied
+# breeds (tuxedo, void) get white outlines so they don't vanish into the bg.
+BW_BASE_CHARS = {
+    "x": 2,   # cardboard box -> white
+    "y": 1,   # box shading -> black
+    "G": 2,   # tombstone slab -> white
+    "h": 1,   # tombstone shadow -> black
+    "d": 2,   # sweat drop -> white
+    "w": 2,   # ghost body -> white
+    "r": 2,
+    "f": 2,   # butterfly wings -> white
+    "u": 2,
+    "m": 1,   # mouth (overridden for dark faces)
+    "i": 2,   # eye shine
+}
+
+BW_BREEDS = {
+    # White cat, black stripes/eyes; black outline melts into the bg.
+    "orange": {"o": 1, "B": 2, "b": 2, "s": 1, "A": 1, "T": 2, "e": 1, "n": 1, "p": 2,
+               "i": 2, "m": 1, "c": 2},
+    # Black cat with white outline, white belly/eyes/mouth.
+    "tuxedo": {"o": 2, "B": 1, "b": 2, "s": 1, "A": 2, "T": 1, "e": 2, "n": 2, "p": 2,
+               "i": 1, "m": 2, "c": 1},
+    # White cat with white outline and black points (ears/tail/paws stay visible).
+    "siamese": {"o": 2, "B": 2, "b": 2, "s": 2, "A": 1, "T": 1, "e": 1, "n": 1, "p": 1,
+                "i": 2, "m": 1, "c": 2},
+    # Solid black cat with white outline and white eyes.
+    "void": {"o": 2, "B": 1, "b": 1, "s": 1, "A": 1, "T": 1, "e": 2, "n": 2, "p": 1,
+             "i": 1, "m": 2, "c": 1},
+}
+
 GRID_W = 24
 
 # ---------------------------------------------------------------------------
 # Cat templates (24 wide). Cat faces right. Bottom row touches the ground.
 # ---------------------------------------------------------------------------
 
-# Side-profile walk (24 wide). Cat faces right; tail on the left.
-# Chars: i=eye shine, m=omega mouth, T=curled tail.
+# Walking cat (24 wide). Frontal head like the idle pose, loaf body,
+# tail curled at the back-left, legs animate below. Faces right.
 
 WALK_TOP = [
-    "oTTTo",
-    ".oBBBBBBBBBBBBBBo",
-    "..oBBBBBBBBBBBBBBBoo",
-    "...oBBBBBBBBBBBBBBBBo",
-    "....oBBsBBBBBBBBBBBBo",
-    ".....oBBBBBBBBBBBBo",
-    "......oBBBBBBBBBBBoooo",
-    ".......oBBBBmmBBBBo",
-    "........oBBBnnBBBBo",
-    ".........oBBBeBBBBo",
-    "..........oBBBBBBBBo",
-    "...........oABBooBBo",
-    "............oAAo.oAAo",
+    "...........oo...oo",
+    "..........oAAo.oAAo",
+    ".........oABBooBBAo",
+    "........oBBBBBBBBBBo",
+    ".......oBBBBBBBBBBBBo",
+    "......oBBeeiBBeeiBBo",
+    ".....oBBccBBnnBBccBBo",
+    ".....oBBBBBBmmBBBBBo",
+    "....oBBBBBBbbBBBBBBo",
+    ".oo.oBBBBBBbbBBBBBBo",
+    "oTToBBsBBBsBBBsBBBBo",
+    "oTToBBBBBBBBBBBBBBBo",
+    ".oooBBBBBBBBBBBBBBo",
 ]
 
 WALK_LEGS = [
-    [  # frame 0: stride out (front legs reach right)
-        "....oBBo.......oBBo",
-        "...oppo.........oppo",
-        "....oo...........oo",
-        "",
-        "",
+    [  # frame 0: stride out (legs spread, paws splayed)
+        "....oBBo.....oBBo",
+        "...oppo.......oppo",
     ],
     [  # frame 1: neutral stance
-        ".....oBBo.....oBBo",
-        ".....oppo.....oppo",
-        "......oo.......oo",
-        "",
-        "",
+        ".....oBBo...oBBo",
+        ".....oppo...oppo",
     ],
-    [  # frame 2: tuck (front legs tuck)
-        "......oBBo...oBBo",
-        "......oppo...oppo",
-        ".......oo.....oo",
-        "",
-        "",
+    [  # frame 2: tuck (legs together)
+        "......oBBo.oBBo",
+        "......oppo.oppo",
     ],
 ]
 
@@ -350,10 +374,12 @@ def save_png(img: Image.Image, path: Path) -> None:
     img.save(path, optimize=True, transparency=alpha)
 
 
-def charmap_for(breed: str | None) -> dict[str, int]:
+def charmap_for(breed: str | None, bw: bool = False) -> dict[str, int]:
     cm = dict(BASE_CHARS)
+    if bw:
+        cm.update(BW_BASE_CHARS)
     if breed is not None:
-        cm.update(BREEDS[breed])
+        cm.update((BW_BREEDS if bw else BREEDS)[breed])
     else:
         # Shared sprites still reference outline chars.
         cm.update({"o": 1, "B": 1, "b": 1, "s": 1, "A": 1, "T": 1, "e": 1, "n": 1, "p": 1})
@@ -413,7 +439,7 @@ def resource_name(filename: str) -> str:
     return f"IMAGE_{stem.upper()}"
 
 
-def make_fish(meat: bool, scale: int = 2) -> Image.Image:
+def make_fish(meat: bool, scale: int = 2, bw: bool = False) -> Image.Image:
     w, h = 32, 8
     img = Image.new("P", (w * scale, h * scale), 0)
     palette_bytes = []
@@ -433,7 +459,7 @@ def make_fish(meat: bool, scale: int = 2) -> Image.Image:
             "....ooooooooooooooo.....",
             "........................",
         ]
-        cm = {".": 0, "o": 1, "B": 3, "e": 1}
+        cm = {".": 0, "o": 1, "B": 2 if bw else 3, "e": 1}
     else:
         rows = [
             "........................",
@@ -445,7 +471,7 @@ def make_fish(meat: bool, scale: int = 2) -> Image.Image:
             "........................",
             "........................",
         ]
-        cm = {".": 0, "G": 9}
+        cm = {".": 0, "G": 2 if bw else 9}
     rows = [r.ljust(w, ".")[:w] for r in rows]
     px = img.load()
     for y, row in enumerate(rows):
@@ -481,6 +507,14 @@ def save_sprite_mirrored(img: Image.Image, base_filename: str, scale: int,
     """Save a horizontally mirrored variant (left-facing)."""
     mirrored = img.transpose(Image.FLIP_LEFT_RIGHT)
     save_sprite(mirrored, base_filename, scale, resources, generated)
+
+
+def save_bw_variant(img: Image.Image, base_filename: str,
+                    generated: dict[str, Image.Image]) -> None:
+    """Save a ~bw tagged copy for 1-bit platforms (diorite/flint)."""
+    bw_filename = f"{Path(base_filename).stem}~bw.png"
+    save_png(img, OUT_DIR / bw_filename)
+    generated[bw_filename] = img
 
 
 def make_preview(images: dict[str, Image.Image]) -> None:
@@ -549,6 +583,31 @@ def main() -> None:
 
         for filename, img in shared.items():
             save_sprite(img, filename, scale, resources, generated)
+
+    # 1-bit variants for B&W platforms, rendered at base (2x) size.
+    for breed in BREEDS:
+        cm = charmap_for(breed, bw=True)
+        for anim, (count, factory) in cat_anims.items():
+            for frame in range(count):
+                filename = f"cat_{breed}_{anim}_{frame}.png"
+                img = render(factory(frame), cm, GRID_W, scale=2)
+                save_bw_variant(img, filename, generated)
+                if anim in mirror_anims:
+                    save_bw_variant(img.transpose(Image.FLIP_LEFT_RIGHT),
+                                    f"cat_{breed}_{anim}_left_{frame}.png", generated)
+
+    shared_bw_cm = charmap_for(None, bw=True)
+    shared_bw: dict[str, Image.Image] = {
+        "tombstone.png": render(TOMBSTONE, shared_bw_cm, GRID_W, scale=2),
+        "ghost_0.png": render(GHOST[0], shared_bw_cm, GHOST_W, scale=2),
+        "ghost_1.png": render(GHOST[1], shared_bw_cm, GHOST_W, scale=2),
+        "butterfly_0.png": render(BUTTERFLY[0], shared_bw_cm, BUTTERFLY_W, scale=2),
+        "butterfly_1.png": render(BUTTERFLY[1], shared_bw_cm, BUTTERFLY_W, scale=2),
+        "fish_skeleton.png": make_fish(meat=False, scale=2, bw=True),
+        "fish_meat.png": make_fish(meat=True, scale=2, bw=True),
+    }
+    for filename, img in shared_bw.items():
+        save_bw_variant(img, filename, generated)
 
     manifest_path = ROOT / "tools" / "generated_resources.json"
     manifest_path.write_text(json.dumps(resources, indent=2) + "\n")
