@@ -1,7 +1,7 @@
 module.exports = [
   {
     type: 'heading',
-    defaultValue: 'Step or Ded'
+    defaultValue: 'NineLives'
   },
   {
     type: 'text',

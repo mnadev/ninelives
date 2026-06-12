@@ -1,5 +1,5 @@
 #
-# Step or Ded watchface build configuration.
+# NineLives watchface build configuration.
 #
 import os.path
 

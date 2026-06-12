@@ -1,5 +1,5 @@
 {
-  "name": "step-or-ded",
+  "name": "ninelives",
   "author": "Mohammed Nadeem",
   "version": "1.0.0",
   "keywords": [
@@ -10,7 +10,7 @@
     "@rebble/clay": "^1.0.10"
   },
   "pebble": {
-    "displayName": "Step or Ded",
+    "displayName": "NineLives",
     "uuid": "acefdd38-0137-4750-85db-a0b672510667",
     "sdkVersion": "3",
     "enableMultiJS": true,

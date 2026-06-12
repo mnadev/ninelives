@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate palettized pixel-art sprites for the Step or Ded watchface.
+"""Generate palettized pixel-art sprites for the NineLives watchface.
 
 Sprites are defined as character grids mapped directly to palette indices,
 rendered at 2x scale, and saved as 4-bit palettized PNGs with a tRNS
