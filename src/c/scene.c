@@ -76,6 +76,8 @@ static const char MOON[][8] = {
   "..mmm..",
 };
 
+// Clouds only drift across colour skies.
+#ifdef PBL_COLOR
 static const char CLOUD[][12] = {
   "....www....",
   "..wwwwwww..",
@@ -83,6 +85,7 @@ static const char CLOUD[][12] = {
   "wwwwwwwwwww",
   ".sssssssss.",
 };
+#endif
 
 typedef struct {
   uint8_t x_pct;
