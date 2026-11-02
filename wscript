@@ -22,10 +22,14 @@ def build(ctx):
 
     build_worker = os.path.exists('worker_src')
     binaries = []
+    # `NINELIVES_DEMO=<scene> pebble build` swaps live data for canned scenes.
+    demo_scene = os.environ.get('NINELIVES_DEMO')
 
     cached_env = ctx.env
     for platform in ctx.env.TARGET_PLATFORMS:
         ctx.env = ctx.all_envs[platform]
+        if demo_scene is not None:
+            ctx.env.append_value('DEFINES', 'NINELIVES_DEMO={}'.format(int(demo_scene)))
         ctx.set_group(ctx.env.PLATFORM_NAME)
         app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
         ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'), target=app_elf, bin_type='app')

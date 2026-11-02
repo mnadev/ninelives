@@ -65,6 +65,16 @@
         },
         {
           "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_WALK_3",
+          "file": "images/cat_orange_walk_3.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_ORANGE_WALK_LEFT_3",
+          "file": "images/cat_orange_walk_left_3.png"
+        },
+        {
+          "type": "bitmap",
           "name": "IMAGE_CAT_ORANGE_IDLE_0",
           "file": "images/cat_orange_idle_0.png"
         },
@@ -142,6 +152,16 @@
           "type": "bitmap",
           "name": "IMAGE_CAT_TUXEDO_WALK_LEFT_2",
           "file": "images/cat_tuxedo_walk_left_2.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_WALK_3",
+          "file": "images/cat_tuxedo_walk_3.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_TUXEDO_WALK_LEFT_3",
+          "file": "images/cat_tuxedo_walk_left_3.png"
         },
         {
           "type": "bitmap",
@@ -225,6 +245,16 @@
         },
         {
           "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_WALK_3",
+          "file": "images/cat_siamese_walk_3.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_SIAMESE_WALK_LEFT_3",
+          "file": "images/cat_siamese_walk_left_3.png"
+        },
+        {
+          "type": "bitmap",
           "name": "IMAGE_CAT_SIAMESE_IDLE_0",
           "file": "images/cat_siamese_idle_0.png"
         },
@@ -305,6 +335,16 @@
         },
         {
           "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_WALK_3",
+          "file": "images/cat_void_walk_3.png"
+        },
+        {
+          "type": "bitmap",
+          "name": "IMAGE_CAT_VOID_WALK_LEFT_3",
+          "file": "images/cat_void_walk_left_3.png"
+        },
+        {
+          "type": "bitmap",
           "name": "IMAGE_CAT_VOID_IDLE_0",
           "file": "images/cat_void_idle_0.png"
         },
@@ -377,16 +417,6 @@
           "type": "bitmap",
           "name": "IMAGE_BUTTERFLY_1",
           "file": "images/butterfly_1.png"
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_FISH_SKELETON",
-          "file": "images/fish_skeleton.png"
-        },
-        {
-          "type": "bitmap",
-          "name": "IMAGE_FISH_MEAT",
-          "file": "images/fish_meat.png"
         }
       ]
     },

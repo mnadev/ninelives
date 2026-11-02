@@ -2,26 +2,9 @@
 
 #include <pebble.h>
 
-#define SCREEN_W PBL_DISPLAY_WIDTH
-#define SCREEN_H PBL_DISPLAY_HEIGHT
-
-#if PBL_DISPLAY_HEIGHT >= 228
-#define HEADER_H 64
-#define HUD_H 48
-#define GROUND_STRIP_H 12
-#else
-// On round displays the HUD stacks steps above the fish bar, so it needs
-// extra height to stay inside the circle.
-#define HEADER_H PBL_IF_ROUND_ELSE(60, 52)
-#define HUD_H PBL_IF_ROUND_ELSE(54, 40)
-#define GROUND_STRIP_H 10
-#endif
-
-#define STAGE_H (SCREEN_H - HEADER_H - HUD_H)
-// Ground line, relative to the stage layer's coordinate space.
-#define GROUND_OFFSET (STAGE_H - GROUND_STRIP_H)
-
 #define DEFAULT_STEP_GOAL 10000
+#define MIN_AUTO_GOAL 1000
+#define MAX_STEP_GOAL 100000
 #define DEFAULT_ACTIVE_START 8
 #define DEFAULT_ACTIVE_END 22
 #define RESURRECTION_STEPS 1000
@@ -40,6 +23,10 @@
 #define PERSIST_KEY_LAST_REWARD_DAY 10
 #define PERSIST_KEY_CACHED_GOAL 11
 #define PERSIST_KEY_CACHED_GOAL_DAY 12
+#define PERSIST_KEY_REVIVED_DAY 13
+#define PERSIST_KEY_SCHEMA_VERSION 14
+#define PERSIST_KEY_SMART_LEVEL 15
+#define PERSIST_KEY_PREVIOUS_GOAL 16
 
 typedef enum {
   CAT_BREED_ORANGE = 0,
@@ -66,6 +53,7 @@ typedef enum {
 } PetState;
 
 typedef struct {
+  // 0 means the smart goal, which adapts to recent days.
   int32_t step_goal;
   CatBreed cat_breed;
   Difficulty difficulty;
@@ -76,38 +64,33 @@ typedef struct {
 typedef struct {
   int32_t steps;
   int32_t step_goal;
+  // Steps needed today to keep from losing a cat (half the goal on Forgiving).
+  int32_t survival_steps;
+  // Where the pace line says the step count should be by now.
   int32_t expected_steps;
   float progress;
-  float pace_ratio;
   PetState pet_state;
+  // Energetic, lazy or distressed: how the day is going, even while the cat
+  // is shown sleeping or charging instead.
+  PetState pace_state;
   int cat_count;
   bool is_dead;
   bool is_sleeping;
   bool is_charging;
   bool is_low_battery;
-  bool pace_paused;
   int32_t resurrection_progress;
   int resurrection_goal;
+  // +1 or -1 when the smart goal moved since yesterday, 0 otherwise.
+  int8_t goal_trend;
 } GameState;
 
 void game_init(void);
 void game_deinit(void);
-void game_reload_settings(void);
+// Re-reads steps, battery and sleep, and settles any finished days.
 void game_update(void);
-void game_on_day_change(void);
 void game_on_settings_received(DictionaryIterator *iter);
-void game_invalidate_goal_cache(void);
 
 const GameSettings *game_get_settings(void);
 const GameState *game_get_state(void);
 
-int32_t game_get_step_goal(void);
-CatBreed game_get_cat_breed_for_slot(int slot);
-PetState game_compute_pace_state(int32_t steps, int32_t goal);
 int game_get_day_number(void);
-
-#ifdef STEP_OR_DED_DEBUG
-void game_debug_force_state(PetState state);
-void game_debug_force_steps(int32_t steps);
-void game_debug_force_cat_count(int count);
-#endif
